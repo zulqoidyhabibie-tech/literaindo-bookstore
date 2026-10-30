@@ -15,6 +15,22 @@ literaindo-bookstore/
 └── documentation/                    # panduan instalasi, admin, backup
 ```
 
+## Dokumentasi
+
+| Dokumen | Isi |
+|---|---|
+| [documentation/setup-guide.md](documentation/setup-guide.md) | Instalasi di hosting langkah demi langkah |
+| [documentation/admin-guide.md](documentation/admin-guide.md) | Menambah buku, halaman ISBN, memproses pesanan QRIS, e-book, refund |
+| [documentation/backup-recovery.md](documentation/backup-recovery.md) | Backup, uji pemulihan, pembaruan |
+| [testing/functional-tests.md](testing/functional-tests.md) | Skenario uji fungsional |
+| [testing/launch-checklist.md](testing/launch-checklist.md) | Checklist sebelum peluncuran |
+
+File zip tema dan plugin untuk diunggah ke WordPress:
+
+```bash
+scripts/build-zips.sh        # hasil di dist/
+```
+
 ## Prinsip
 
 - Gunakan fitur bawaan WooCommerce sebanyak mungkin.
