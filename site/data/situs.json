@@ -1,0 +1,28 @@
+{
+  "nama": "Literaindo Press",
+  "tagline": "Penerbit Buku Pendidikan dan Referensi Akademik",
+  "url": "https://literaindo.com",
+  "deskripsi": "Literaindo Press menerbitkan buku pendidikan, metodologi penelitian, matematika dan statistika, serta pendidikan digital dalam format cetak dan e-book.",
+  "badan_usaha": "[nama CV]",
+  "alamat": "[alamat lengkap]",
+  "email": "[email]",
+  "whatsapp": "6281234567890",
+  "whatsapp_tampil": "[nomor WhatsApp]",
+  "jam_layanan": "Senin–Jumat, 08.00–16.00 WIB",
+  "qris_gambar": "/assets/img/qris-btn.png",
+  "qris_nama_merchant": "[nama merchant di QRIS]",
+  "warna_utama": "#1d5fa8",
+  "menu": [
+    { "label": "Katalog", "url": "/" },
+    { "label": "Tentang Kami", "url": "/tentang-kami/" },
+    { "label": "Layanan Penerbitan", "url": "/layanan-penerbitan/" },
+    { "label": "Cara Pemesanan", "url": "/cara-pemesanan/" },
+    { "label": "Kontak", "url": "/kontak/" }
+  ],
+  "tautan_terkait": [
+    { "label": "Cara Pemesanan", "url": "/cara-pemesanan/" },
+    { "label": "Syarat & Ketentuan", "url": "/syarat-ketentuan/" },
+    { "label": "Kebijakan Privasi", "url": "/kebijakan-privasi/" },
+    { "label": "Perpustakaan Nasional RI", "url": "https://isbn.perpusnas.go.id/" }
+  ]
+}

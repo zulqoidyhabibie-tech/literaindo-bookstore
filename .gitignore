@@ -1,17 +1,11 @@
-# Konfigurasi dan kredensial
-wp-config.php
+# Hasil build (dibuat ulang oleh GitHub Actions)
+dist/
+node_modules/
+*.zip
+
+# Kredensial
 .env
 *.env
-
-# Unggahan dan cache WordPress
-wp-content/uploads/
-wp-content/cache/
-
-# Dependensi dan build
-node_modules/
-vendor/
-*.zip
-dist/
 
 # Sistem operasi / editor
 .DS_Store
