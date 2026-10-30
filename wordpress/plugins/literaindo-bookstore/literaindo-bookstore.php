@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Literaindo Bookstore
  * Plugin URI:        https://github.com/zulqoidyhabibie-tech/literaindo-bookstore
- * Description:       Fungsi khusus Literaindo Press Bookstore: metadata buku (penulis, ISBN, status terbit), format cetak/e-book, dan pembayaran QRIS BTN dengan unggah bukti bayar.
+ * Description:       Fungsi khusus Literaindo Press Bookstore: metadata buku (penulis, ISBN, status terbit), format cetak/e-book, pembayaran QRIS BTN dengan unggah bukti bayar, perlindungan e-book, dan daftar periksa Persiapan Toko.
  * Version:           0.1.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
@@ -56,11 +56,17 @@ function literaindo_bookstore_init() {
 	require_once LITERAINDO_BOOKSTORE_DIR . 'includes/class-lit-book-meta.php';
 	require_once LITERAINDO_BOOKSTORE_DIR . 'includes/class-lit-qris-gateway.php';
 	require_once LITERAINDO_BOOKSTORE_DIR . 'includes/class-lit-qris-proof.php';
+	require_once LITERAINDO_BOOKSTORE_DIR . 'includes/class-lit-ebook.php';
+	require_once LITERAINDO_BOOKSTORE_DIR . 'includes/class-lit-setup.php';
 
 	Lit_Settings::init();
 	Lit_Book_Format::init();
 	Lit_Book_Meta::init();
 	Lit_QRIS_Proof::init();
+	Lit_Ebook::init();
+	if ( is_admin() ) {
+		Lit_Setup::init();
+	}
 
 	add_filter( 'woocommerce_payment_gateways', 'literaindo_bookstore_register_gateway' );
 	add_action( 'woocommerce_blocks_payment_method_type_registration', 'literaindo_bookstore_register_blocks_gateway' );

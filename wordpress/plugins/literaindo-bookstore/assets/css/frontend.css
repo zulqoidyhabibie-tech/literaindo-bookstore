@@ -101,3 +101,10 @@
 		margin: 0 auto;
 	}
 }
+
+.lit-delivery-note {
+	font-size: 0.9rem;
+	color: var(--lit-muted, #5d6670);
+	padding-left: 0.75rem;
+	border-left: 3px solid var(--lit-stone, #e8e5de);
+}

@@ -66,6 +66,56 @@ location ^~ /wp-content/uploads/literaindo-proofs/ { deny all; }
 
 Nama file juga acak, dan admin membuka bukti lewat `admin-post.php` dengan cek hak akses.
 
+## Persiapan Toko
+
+Menu **WooCommerce → Persiapan Toko** berisi daftar periksa sebelum peluncuran:
+bahasa situs, format Rupiah, permalink `/produk/`, QRIS, folder bukti bayar,
+keamanan unduhan e-book, zona pengiriman, dan halaman kebijakan. Beberapa butir
+punya tombol untuk langsung menerapkannya.
+
+### E-book
+
+Tombol **Terapkan pengaturan e-book** mengatur WooCommerce agar:
+
+- file diunduh lewat mode *Paksa unduh* (URL asli file tidak terlihat);
+- unduhan hanya untuk pelanggan yang login, dan baru terbuka setelah pembayaran dikonfirmasi;
+- tidak ada pengalihan ke URL file asli bila unduhan gagal;
+- nama file e-book diberi kode acak saat diunggah.
+
+File e-book diunggah lewat kolom *Berkas yang dapat diunduh* di produk/variasi
+(tersimpan di folder `woocommerce_uploads` yang dilindungi WooCommerce). Atur
+*Batas unduhan* dan *Kedaluwarsa unduhan* per produk sesuai Ketentuan E-book,
+misalnya 5 kali dalam 30 hari.
+
+Karena unduhan memerlukan login, checkout yang berisi e-book otomatis mewajibkan
+pembuatan akun. Halaman produk e-book menampilkan keterangan cara menerima file.
+
+### Ongkos kirim
+
+Ongkir hanya dihitung untuk buku cetak: e-book dibuat sebagai produk *Virtual*,
+dan WooCommerce tidak meminta alamat atau ongkir untuk produk virtual. Untuk MVP,
+buat zona pengiriman "Indonesia" dengan *Tarif Tetap* (atau tarif per kelas
+pengiriman). Integrasi kurir otomatis masuk tahap lanjutan.
+
+### Halaman bantuan dan kebijakan
+
+Tombol **Buat draf yang belum ada** membuat halaman berikut sebagai **draf**
+berisi teks contoh berbahasa Indonesia:
+
+| Halaman | URL |
+|---|---|
+| Tentang Kami | `/tentang-kami/` |
+| Bantuan & FAQ | `/bantuan/` |
+| Syarat Transaksi | `/syarat-transaksi/` (dihubungkan ke pengaturan syarat & ketentuan WooCommerce) |
+| Pengiriman, Retur, dan Refund | `/pengiriman-retur-refund/` |
+| Ketentuan Penggunaan E-book | `/ketentuan-ebook/` |
+| Kebijakan Privasi | `/kebijakan-privasi/` (dijadikan halaman privasi WordPress) |
+
+Halaman yang sudah ada tidak diubah. Jika menu footer *Bantuan & Kebijakan*
+(dari tema literaindo-child) masih kosong, menu itu ikut dibuat. Lengkapi bagian
+dalam `[kurung siku]`, tinjau isi kebijakan (sebaiknya bersama penasihat hukum),
+lalu terbitkan.
+
 ## Pengembangan
 
 ```bash
