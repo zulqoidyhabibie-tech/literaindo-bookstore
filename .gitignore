@@ -11,6 +11,7 @@ wp-content/cache/
 node_modules/
 vendor/
 *.zip
+dist/
 
 # Sistem operasi / editor
 .DS_Store
