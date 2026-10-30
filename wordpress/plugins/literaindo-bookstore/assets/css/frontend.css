@@ -1,0 +1,103 @@
+/* Literaindo Bookstore: komponen plugin. Warna mengikuti token tema bila ada. */
+
+.lit-badge {
+	display: inline-block;
+	margin-bottom: 0.5rem;
+	padding: 0.2em 0.6em;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	border-radius: 4px;
+	background: var(--lit-maroon, #873e4a);
+	color: #fff;
+}
+
+.lit-upcoming-notice {
+	padding: 0.85rem 1rem;
+	border-left: 4px solid var(--lit-maroon, #873e4a);
+	background: var(--lit-ivory, #f7f3ea);
+	color: var(--lit-ink, #2b2f33);
+}
+
+.lit-qris {
+	margin: 2rem 0;
+	padding: clamp(1rem, 3vw, 2rem);
+	background: #fff;
+	border: 1px solid var(--lit-stone, #e8e5de);
+	border-radius: 8px;
+}
+
+.lit-qris h2 {
+	margin-top: 0;
+}
+
+.lit-qris__grid {
+	display: grid;
+	grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+	gap: clamp(1rem, 3vw, 2rem);
+	align-items: start;
+}
+
+.lit-qris__code {
+	margin: 0;
+	text-align: center;
+}
+
+.lit-qris__code img {
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--lit-stone, #e8e5de);
+	border-radius: 8px;
+	background: #fff;
+}
+
+.lit-qris__code figcaption {
+	margin-top: 0.5rem;
+	font-weight: 600;
+}
+
+.lit-qris__label {
+	margin: 0;
+	color: var(--lit-muted, #5d6670);
+	font-size: 0.9rem;
+}
+
+.lit-qris__amount {
+	margin: 0 0 1rem;
+	font-size: clamp(1.75rem, 4vw, 2.25rem);
+	font-weight: 700;
+	color: var(--lit-navy, #173b57);
+}
+
+.lit-qris__steps {
+	margin: 1rem 0 1rem 1.25rem;
+}
+
+.lit-qris__note {
+	font-size: 0.9rem;
+	color: var(--lit-muted, #5d6670);
+}
+
+.lit-qris__proof {
+	margin-top: 1.5rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--lit-stone, #e8e5de);
+}
+
+.lit-qris__proof input[type="file"] {
+	display: block;
+	margin-top: 0.5rem;
+	max-width: 100%;
+}
+
+@media (max-width: 640px) {
+	.lit-qris__grid {
+		grid-template-columns: 1fr;
+	}
+
+	.lit-qris__code {
+		max-width: 260px;
+		margin: 0 auto;
+	}
+}
