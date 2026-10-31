@@ -57,6 +57,26 @@
 		if (catatan.length) cat.firstChild.textContent = catatan.join(' ') + ' Isi harga per buku secara manual atau lengkapi ';
 		otomatis(perBuku, taksir || '');
 		hitungTagihan();
+		hitungBerat(uk, n, k ? k.gramasi : (parseInt(gram.value, 10) || 0));
+	}
+
+	// Taksiran berat: luas kertas (m²) × gramasi. Cover soft ±260 gsm, hard cover memakai karton ±1.300 gsm.
+	var LUAS = { A5: 0.148 * 0.21, B5: 0.176 * 0.25, A4: 0.21 * 0.297 }, KEMASAN = 100, DEPOSIT = 2, TIDAK_DIKIRIM = 4;
+	var bulat = function (g) { return g >= 1000 ? '±' + (g / 1000).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' kg' : '±' + Math.round(g) + ' g'; };
+	var tulis = function (k, v) { var el = akar.querySelector('[data-b="' + k + '"]'); if (el) el.textContent = v; };
+	function hitungBerat(uk, halaman, gramasi) {
+		var luas = LUAS[uk] || LUAS.A5;
+		var lembarFisik = spek('sisi_cetak') === '2' ? Math.ceil(halaman / 2) : halaman;
+		var isi = lembarFisik * luas * (gramasi || 75);
+		var cover = 2 * luas * (spek('jenis_sampul') === 'hard' ? 1300 : 260) + (spek('jilid') === 'spiral' ? 10 : 5);
+		var buku = isi + cover, eks = angka(jumlah);
+		var penulis = Math.max(0, eks - TIDAK_DIKIRIM);
+		tulis('buku', halaman ? bulat(buku) : '-');
+		tulis('n-total', eks + ' eks');
+		tulis('total', halaman ? bulat(buku * eks) : '-');
+		tulis('n-penulis', penulis + ' eks + kemasan');
+		tulis('penulis', halaman && penulis ? bulat(buku * penulis + KEMASAN) : '-');
+		tulis('perpusnas', halaman ? bulat(buku * DEPOSIT + KEMASAN) : '-');
 	}
 
 	function hitungTagihan() {
@@ -74,7 +94,7 @@
 	akar.querySelectorAll('[data-spek]').forEach(function (el) { el.addEventListener('change', hitung); });
 	gram.addEventListener('change', hitung);
 	perBuku.addEventListener('input', hitungTagihan);
-	jumlah.addEventListener('input', hitungTagihan);
+	jumlah.addEventListener('input', hitung);
 	if (potong) potong.addEventListener('change', function () { delete tagihan.dataset.manual; delete rincian.dataset.manual; hitungTagihan(); });
 	akar.querySelector('[data-pakai-taksiran]').addEventListener('click', function () {
 		delete perBuku.dataset.manual; delete tagihan.dataset.manual; delete rincian.dataset.manual;
