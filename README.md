@@ -40,7 +40,7 @@ site/
 
 3. Commit ke `main`. GitHub Actions membangun website dan memperbarui cabang `deploy`.
 
-Link buku: `https://literaindo.com/buku/<slug>/`.
+Link buku: `https://bookstore.literaindo.com/buku/<slug>/`.
 
 ## Mencoba di komputer
 
@@ -57,7 +57,7 @@ Hostinger hPanel → Websites → Kelola → Lanjutan → **GIT**:
 
 - Repositori: `git@github.com:zulqoidyhabibie-tech/literaindo-bookstore.git`
 - Cabang: `deploy`
-- Direktori: kosong (= `public_html`, harus kosong saat pertama dipasang)
+- Direktori: `bookstore` (folder subdomain bookstore.literaindo.com di dalam `public_html`, harus kosong saat pertama dipasang)
 
 Karena repo privat, salin **SSH key** dari halaman GIT hPanel ke GitHub →
 Settings → Deploy keys (cukup akses baca). Untuk pembaruan otomatis, aktifkan
