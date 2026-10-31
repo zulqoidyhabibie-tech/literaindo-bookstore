@@ -37,7 +37,8 @@
 		return daftar;
 	}
 
-	function otomatis(el, nilai) { if (el && !el.dataset.manual) el.value = nilai; }
+	var isiUang = function (el, nilai) { el.value = el.hasAttribute('data-rupiah') && window.rupiahFmt ? window.rupiahFmt(nilai) : nilai; };
+	function otomatis(el, nilai) { if (el && !el.dataset.manual) { isiUang(el, nilai); if (el === rincian) tinggi(); } }
 
 	function hitung() {
 		var uk = spek('ukuran').split(' ')[0], daftar = isiGramasi(), catatan = [];
@@ -91,6 +92,11 @@
 		var tabel = akar.querySelector('[data-rincian-paket]'), cek = akar.querySelector('[data-hanya-tanpa-paket]');
 		if (tabel) tabel.hidden = !pk;
 		if (cek) cek.hidden = !!pk;
+		var digital = !!(pk && pk.eks === 0);
+		var bc = akar.querySelector('[data-blok-cetak]'), bd = akar.querySelector('[data-blok-digital]');
+		if (bc) bc.hidden = digital;
+		if (bd) bd.hidden = !digital;
+		if (digital) { jumlah.value = 0; eks = 0; }
 		if (pk) {
 			jumlah.min = pk.eks;
 			akar.querySelectorAll('[data-min-eks]').forEach(function (el) { el.textContent = pk.eks; });
@@ -125,7 +131,11 @@
 	if (potong) potong.addEventListener('change', function () { delete tagihan.dataset.manual; delete rincian.dataset.manual; hitungTagihan(); });
 	akar.querySelector('[data-pakai-taksiran]').addEventListener('click', function () {
 		delete perBuku.dataset.manual; delete tagihan.dataset.manual; delete rincian.dataset.manual;
-		perBuku.value = jual || ''; hitungTagihan();
+		isiUang(perBuku, jual || ''); hitungTagihan();
 	});
 	hitung();
+	// Kotak rincian memanjang mengikuti isi.
+	function tinggi() { if (rincian && rincian.tagName === 'TEXTAREA') { rincian.style.height = 'auto'; rincian.style.height = rincian.scrollHeight + 2 + 'px'; } }
+	if (rincian) rincian.addEventListener('input', tinggi);
+	tinggi();
 })();

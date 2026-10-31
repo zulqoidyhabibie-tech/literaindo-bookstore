@@ -102,6 +102,32 @@ function simpan_pengaturan(string $k, string $v): void
 	}
 }
 
+/** Identitas website yang bisa diubah admin di Pengaturan (menimpa app/data/situs.json). */
+const IDENTITAS = [
+	'tagline'         => ['Tulisan di bawah logo', 'input'],
+	'deskripsi'       => ['Tentang singkat (tampil di footer)', 'textarea'],
+	'badan_usaha'     => ['Nama badan usaha', 'input'],
+	'alamat'          => ['Alamat', 'textarea'],
+	'email'           => ['Email', 'input'],
+	'whatsapp_tampil' => ['Nomor WhatsApp', 'input'],
+	'jam_layanan'     => ['Jam layanan', 'input'],
+];
+
+function terapkan_identitas(): void
+{
+	global $SITUS;
+	foreach (array_keys(IDENTITAS) as $k) {
+		$v = pengaturan('situs_' . $k);
+		if ($v !== '') {
+			$SITUS[$k] = $v;
+		}
+	}
+	$d = preg_replace('/\D/', '', (string) $SITUS['whatsapp_tampil']);
+	if ($d !== '') {
+		$SITUS['whatsapp'] = str_starts_with($d, '0') ? '62' . substr($d, 1) : $d;
+	}
+}
+
 // ---------- Teks & URL ----------
 
 function e($s): string

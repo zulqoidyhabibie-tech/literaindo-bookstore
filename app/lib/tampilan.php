@@ -83,7 +83,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=14';
+	$css = url('/assets/css/gaya.css') . '?v=16';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -134,7 +134,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	</div>
 	<p class="kaki__hak">© ' . $tahun . ' ' . e($SITUS['nama']) . '. Seluruh hak cipta dilindungi.</p>
 </footer>
-' . ($u ? '<script src="' . e(url('/assets/js/lonceng.js')) . '" defer></script>' : '') . '
+' . ($u ? '<script src="' . e(url('/assets/js/lonceng.js')) . '" defer></script><script src="' . e(url('/assets/js/rupiah.js')) . '?v=1" defer></script>' : '') . '
 </body>
 </html>
 ';
@@ -212,7 +212,7 @@ function menu_admin(string $aktif): string
 		'' => [['/admin', 'Dasbor', 'dasbor']],
 		'Naskah' => [['/admin/pengajuan', 'Pengajuan', 'naskah', $naskah], ['/admin/buku', 'Katalog', 'buku']],
 		'Penjualan' => [['/admin/pesanan', 'Pesanan', 'keranjang', $pesanan], ['/keuangan', 'Keuangan', 'uang', $bayar], ['/admin/harga', 'Harga Cetak', 'harga']],
-		'Pengaturan' => [['/admin/pengguna', 'Pengguna', 'orang'], ['/admin/pengaturan', 'Pengaturan', 'atur']],
+		'Pengaturan' => [['/admin/halaman', 'Halaman Website', 'halaman'], ['/admin/pengguna', 'Pengguna', 'orang'], ['/admin/pengaturan', 'Pengaturan', 'atur']],
 	], ['/admin', '/admin/pengajuan', '/admin/pesanan', '/keuangan'], $aktif);
 }
 

@@ -155,7 +155,21 @@ function taksiran_cetak(array $p, int $halaman, int $gramasi): array
 const PAKET = [
 	'aksara' => ['Paket Aksara', 5, false, 'harga_paket_aksara', 350000, 'ISBN + cetak 5 eksemplar'],
 	'pustaka' => ['Paket Pustaka', 10, true, 'harga_paket_pustaka', 750000, 'ISBN + cetak 10 eksemplar + sertifikat HKI'],
+	'digital' => ['Paket Digital', 0, false, 'harga_paket_digital', 250000, 'ISBN e-book (PDF), tanpa cetak'],
 ];
+
+/** Jenis ISBN yang diajukan: [label, keterangan]. Perpusnas memberi ISBN terpisah untuk cetak dan e-book. */
+const FORMAT_TERBIT = [
+	'cetak' => ['Buku cetak', 'ISBN untuk buku fisik. Pilih Paket Aksara atau Pustaka.'],
+	'ebook' => ['E-book saja (PDF)', 'ISBN elektronik tanpa cetak. Memakai Paket Digital; berkas PDF diserahkan ke Perpusnas.'],
+	'keduanya' => ['Cetak + E-book', 'Dua ISBN: buku cetak dan e-book. Harga sama dengan paket cetak yang dipilih, tanpa tambahan.'],
+];
+
+/** Paket yang cocok untuk jenis ISBN tertentu. */
+function paket_untuk_format(string $format): array
+{
+	return $format === 'ebook' ? ['digital'] : ['aksara', 'pustaka'];
+}
 const SPEK_STANDAR = ['ukuran' => 'A5 (14,8 × 21 cm)', 'sisi_cetak' => '2', 'warna_isi' => 'hitam_putih', 'jenis_kertas' => 'hvs', 'jenis_sampul' => 'soft', 'jilid' => 'lem', 'laminasi' => 'doff'];
 const EKS_TIDAK_UNTUK_PENULIS = 4; // 2 Perpusnas, 1 Perpusda, 1 arsip penerbit
 
@@ -198,13 +212,17 @@ function kartu_paket(string $nama_input = '', string $terpilih = ''): string
 	$batas = batas_halaman_paket();
 	$out = '<div class="paket-grid">';
 	foreach (data_paket() as $k => $p) {
+		$digital = $p['eks'] === 0;
 		$isi = '<span class="paket__nama">' . e($p['nama']) . '</span><span class="paket__harga">' . rupiah($p['harga']) . '</span>'
-			. '<ul class="paket__isi"><li>ISBN dari Perpustakaan Nasional RI</li><li>Cetak ' . $p['eks'] . ' eksemplar (' . ($p['eks'] - EKS_TIDAK_UNTUK_PENULIS) . ' untuk penulis, ' . EKS_TIDAK_UNTUK_PENULIS . ' untuk wajib serah dan arsip)</li>'
-			. ($p['hki'] ? '<li>Sertifikat HKI (hak cipta)</li>' : '')
-			. '<li>Halaman buku di katalog Literaindo Press</li></ul>'
-			. '<span class="paket__catatan">Untuk buku A5 hingga ' . $batas . ' halaman, HVS hitam putih, soft cover. Halaman lebih banyak atau spesifikasi lain menyesuaikan daftar harga cetak. Belum termasuk ongkos kirim.</span>';
+			. ($digital
+				? '<ul class="paket__isi"><li>ISBN e-book dari Perpustakaan Nasional RI</li><li>Tanpa cetak; berkas PDF diserahkan ke Perpusnas sebagai wajib serah digital</li><li>Halaman buku di katalog dan bisa dijual sebagai e-book</li></ul>'
+					. '<span class="paket__catatan">Untuk naskah e-book siap terbit (PDF). Ingin sekaligus versi cetak? Pilih jenis ISBN Cetak + E-book dengan Paket Aksara atau Pustaka, tanpa biaya tambahan.</span>'
+				: '<ul class="paket__isi"><li>ISBN dari Perpustakaan Nasional RI</li><li>Cetak ' . $p['eks'] . ' eksemplar (' . ($p['eks'] - EKS_TIDAK_UNTUK_PENULIS) . ' untuk penulis, ' . EKS_TIDAK_UNTUK_PENULIS . ' untuk wajib serah dan arsip)</li>'
+					. ($p['hki'] ? '<li>Sertifikat HKI (hak cipta)</li>' : '')
+					. '<li>Halaman buku di katalog Literaindo Press</li><li>Bisa ditambah ISBN e-book tanpa biaya</li></ul>'
+					. '<span class="paket__catatan">Untuk buku A5 hingga ' . $batas . ' halaman, HVS hitam putih, soft cover. Halaman lebih banyak atau spesifikasi lain menyesuaikan daftar harga cetak. Belum termasuk ongkos kirim.</span>');
 		$out .= $nama_input
-			? '<label class="paket"><input type="radio" name="' . e($nama_input) . '" value="' . $k . '" data-eks="' . $p['eks'] . '"' . ($k === $terpilih ? ' checked' : '') . '>' . $isi . '</label>'
+			? '<label class="paket"' . ($digital ? ' data-untuk-ebook' : ' data-untuk-cetak') . '><input type="radio" name="' . e($nama_input) . '" value="' . $k . '" data-eks="' . $p['eks'] . '"' . ($k === $terpilih ? ' checked' : '') . '>' . $isi . '</label>'
 			: '<div class="paket">' . $isi . '</div>';
 	}
 	return $out . '</div>';

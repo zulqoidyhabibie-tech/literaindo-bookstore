@@ -1945,3 +1945,24 @@ ul.pesan {
 	.menu-bawah__lainnya[open] > summary::after { content: ""; position: fixed; inset: 0 0 calc(var(--tinggi-bawah) + env(safe-area-inset-bottom)) 0; background: rgba(0,0,0,.35); z-index: 1; }
 	.menu-lembar { position: fixed; left: 0; right: 0; bottom: calc(var(--tinggi-bawah) + env(safe-area-inset-bottom)); z-index: 2; max-height: 72vh; overflow: auto; background: #fff; border-radius: 14px 14px 0 0; padding: .6rem 0 .8rem; box-shadow: 0 -8px 24px rgba(0,0,0,.15); }
 }
+
+/* ---------- Isian rupiah & kotak yang memanjang ---------- */
+.isian-rp { position: relative; display: block; }
+.isian-rp--kecil { display: inline-block; }
+.isian-rp::before { content: "Rp"; position: absolute; left: .75rem; top: 50%; transform: translateY(-50%); color: var(--redup); font-weight: 600; pointer-events: none; }
+.isian-rp--kecil::before { left: .5rem; font-size: .85em; }
+.isian-rp > input { padding-left: 2.5rem !important; width: 100%; }
+.isian-rp--kecil > input { padding-left: 1.9rem !important; }
+.kolom-2 > .lebar-penuh { grid-column: 1 / -1; }
+textarea.isian-tumbuh { resize: vertical; min-height: 2.8rem; overflow: hidden; line-height: 1.5; }
+
+/* ---------- Penyunting halaman ---------- */
+.penyunting__alat { display: flex; flex-wrap: wrap; gap: .35rem; position: sticky; top: 0; z-index: 2; background: var(--panel); padding: .5rem 0; border-bottom: 1px solid var(--garis); }
+.penyunting__isi { min-height: 320px; border: 1px solid var(--garis); border-radius: var(--sudut); padding: 1rem 1.2rem; margin: .75rem 0 1rem; background: #fff; outline: none; }
+.penyunting__isi:focus { border-color: var(--warna-utama); box-shadow: 0 0 0 3px rgba(11,90,63,.12); }
+.pilih-format-terbit .pilih-format { align-items: flex-start; }
+.pilih-format-terbit .pilih-format span { margin-left: 0; color: inherit; font-weight: 400; }
+.pilih-format-terbit .pilih-format span.catatan { color: var(--redup); font-size: .9rem; }
+.pilih-format-terbit .pilih-format strong { font-weight: 600; }
+.pilih-format-terbit .pilih-format input { margin-top: .3rem; }
+.paket[hidden], [data-blok-cetak][hidden], fieldset[data-hanya-cetak][hidden] { display: none !important; }
