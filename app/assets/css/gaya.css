@@ -1733,3 +1733,119 @@ ul.pesan {
 .formulir .subjudul-form:first-child {
 	margin-top: 0;
 }
+
+/* Harga cetak & taksiran */
+.tabel-harga td {
+	vertical-align: middle;
+	padding: 0.35rem 0.6rem;
+}
+
+.tabel-harga__grup th {
+	background: #e8f1ed;
+	color: var(--tinta);
+}
+
+.tabel-harga__kode {
+	font-family: ui-monospace, Consolas, monospace;
+	font-size: 0.85rem;
+}
+
+.formulir .tabel-harga input.isian-harga,
+.formulir .tabel-harga input.isian-kecil {
+	min-height: 36px;
+	padding: 0.3rem 0.5rem;
+	text-align: right;
+}
+
+.formulir .tabel-harga input.isian-harga {
+	width: 7.5rem;
+}
+
+.formulir .tabel-harga input.isian-kecil {
+	width: 4.5rem;
+}
+
+.formulir label.hapus-baris {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	margin: 0;
+	font-weight: 400;
+	font-size: 0.85rem;
+	color: var(--segera);
+	white-space: nowrap;
+}
+
+.tambah-harga {
+	margin: 0.5rem 0 1.5rem;
+}
+
+.tambah-harga summary {
+	cursor: pointer;
+	font-weight: 600;
+	color: var(--warna-utama);
+}
+
+.baris-tambah {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.6rem;
+}
+
+.formulir .baris-tambah label {
+	display: grid;
+	gap: 0.25rem;
+	margin: 0;
+}
+
+.kotak-cara {
+	margin-bottom: 1.5rem;
+}
+
+.taksiran {
+	width: 100%;
+	margin: 0.6rem 0;
+	border-collapse: collapse;
+	background: #fff;
+	border: 1px solid var(--garis);
+	border-radius: var(--sudut);
+	font-size: 0.95rem;
+}
+
+.taksiran th,
+.taksiran td {
+	padding: 0.55rem 0.75rem;
+	border-bottom: 1px solid var(--garis);
+	text-align: left;
+}
+
+.taksiran td:last-child {
+	text-align: right;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.taksiran td:nth-child(2) {
+	color: var(--redup);
+}
+
+.taksiran__total th,
+.taksiran__total td {
+	background: #e8f1ed;
+	color: var(--tinta);
+	font-size: 1.05rem;
+	border-bottom: 0;
+}
+
+.tautan-tombol {
+	margin-top: 0.3rem;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--warna-utama);
+	font: inherit;
+	font-size: 0.85rem;
+	text-decoration: underline;
+	cursor: pointer;
+	justify-self: start;
+}

@@ -22,7 +22,7 @@ function skema_notifikasi(string $driver): string
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 5) {
+	if ($versi >= 6) {
 		return;
 	}
 	if ($versi < 2) {
@@ -40,15 +40,25 @@ function pastikan_skema(): void
 	} catch (PDOException) {
 		db()->exec('ALTER TABLE pembayaran ADD COLUMN pemeriksa_id ' . ((config()['db']['driver'] ?? 'mysql') === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED') . ' NULL');
 	}
-	// v5: spesifikasi cetak (sisi, warna, kertas, cover, laminasi)
-	try {
-		db()->query('SELECT sisi_cetak FROM pengajuan LIMIT 1');
-	} catch (PDOException) {
-		foreach (['sisi_cetak', 'warna_isi', 'jenis_kertas', 'jenis_sampul', 'laminasi'] as $kolom) {
-			db()->exec("ALTER TABLE pengajuan ADD COLUMN $kolom VARCHAR(20) NOT NULL DEFAULT ''");
+	// v5/v6: spesifikasi cetak, taksiran harga, dan daftar harga
+	$kolom_baru = [
+		'sisi_cetak' => "VARCHAR(20) NOT NULL DEFAULT ''", 'warna_isi' => "VARCHAR(20) NOT NULL DEFAULT ''",
+		'jenis_kertas' => "VARCHAR(20) NOT NULL DEFAULT ''", 'jenis_sampul' => "VARCHAR(20) NOT NULL DEFAULT ''",
+		'jilid' => "VARCHAR(20) NOT NULL DEFAULT ''", 'laminasi' => "VARCHAR(20) NOT NULL DEFAULT ''",
+		'gramasi' => 'INT NOT NULL DEFAULT 0', 'halaman_cetak' => 'INT NOT NULL DEFAULT 0', 'harga_per_buku' => 'INT NOT NULL DEFAULT 0',
+	];
+	foreach ($kolom_baru as $kolom => $tipe) {
+		try {
+			db()->query("SELECT $kolom FROM pengajuan LIMIT 1");
+		} catch (PDOException) {
+			db()->exec("ALTER TABLE pengajuan ADD COLUMN $kolom $tipe");
 		}
 	}
-	simpan_pengaturan('versi_skema', '5');
+	foreach (skema_harga(config()['db']['driver'] ?? 'mysql') as $sql) {
+		db()->exec($sql);
+	}
+	isi_harga_awal();
+	simpan_pengaturan('versi_skema', '6');
 }
 
 function skema(string $driver): array
@@ -108,6 +118,10 @@ function skema(string $driver): array
 			warna_isi VARCHAR(20) NOT NULL DEFAULT '',
 			jenis_kertas VARCHAR(20) NOT NULL DEFAULT '',
 			jenis_sampul VARCHAR(20) NOT NULL DEFAULT '',
+			jilid VARCHAR(20) NOT NULL DEFAULT '',
+			gramasi INT NOT NULL DEFAULT 0,
+			halaman_cetak INT NOT NULL DEFAULT 0,
+			harga_per_buku INT NOT NULL DEFAULT 0,
 			laminasi VARCHAR(20) NOT NULL DEFAULT '',
 			jumlah_cetak INT NOT NULL DEFAULT 0,
 			halaman_final VARCHAR(40) NOT NULL DEFAULT '',

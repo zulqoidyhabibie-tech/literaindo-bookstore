@@ -106,15 +106,17 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 		}
 
 		if (!$galat) {
+			$kolom_cetak = array_keys(PILIHAN_CETAK);
+			$nilai_cetak = array_map(fn ($k) => $v[$k], $kolom_cetak);
 			db()->beginTransaction();
 			try {
 				if ($p) {
-					q('UPDATE pengajuan SET judul=?, subjudul=?, penulis=?, kategori=?, sinopsis=?, perkiraan_halaman=?, ukuran=?, sisi_cetak=?, warna_isi=?, jenis_kertas=?, jenis_sampul=?, laminasi=?, jumlah_cetak_diminta=?, jenis_karya=?, diubah=? WHERE id=?',
-						[$v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['sisi_cetak'], $v['warna_isi'], $v['jenis_kertas'], $v['jenis_sampul'], $v['laminasi'], $v['jumlah_cetak_diminta'], $v['jenis_karya'], sekarang(), $p['id']]);
+					q('UPDATE pengajuan SET judul=?, subjudul=?, penulis=?, kategori=?, sinopsis=?, perkiraan_halaman=?, ' . implode('=?, ', $kolom_cetak) . '=?, jumlah_cetak_diminta=?, jenis_karya=?, diubah=? WHERE id=?',
+						[$v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], ...$nilai_cetak, ...[$v['jumlah_cetak_diminta'], $v['jenis_karya'], sekarang(), $p['id']]]);
 					$id = (int) $p['id'];
 				} else {
-					q('INSERT INTO pengajuan (pengguna_id, judul, subjudul, penulis, kategori, sinopsis, perkiraan_halaman, ukuran, sisi_cetak, warna_isi, jenis_kertas, jenis_sampul, laminasi, jumlah_cetak_diminta, jenis_karya, status, dibuat, diubah) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-						[$u['id'], $v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['sisi_cetak'], $v['warna_isi'], $v['jenis_kertas'], $v['jenis_sampul'], $v['laminasi'], $v['jumlah_cetak_diminta'], $v['jenis_karya'], 'DRAF', sekarang(), sekarang()]);
+					q('INSERT INTO pengajuan (pengguna_id, judul, subjudul, penulis, kategori, sinopsis, perkiraan_halaman, ' . implode(', ', $kolom_cetak) . ', jumlah_cetak_diminta, jenis_karya, status, dibuat, diubah) VALUES (' . implode(',', array_fill(0, 12 + count($kolom_cetak), '?')) . ')',
+						[$u['id'], $v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], ...$nilai_cetak, ...[$v['jumlah_cetak_diminta'], $v['jenis_karya'], 'DRAF', sekarang(), sekarang()]]);
 					$id = (int) db()->lastInsertId();
 					catat($id, (int) $u['id'], 'Pengajuan dibuat.', true);
 				}

@@ -367,10 +367,13 @@ const PILIHAN_CETAK = [
 		'bookpaper' => ['Bookpaper', 'Krem kekuningan, ringan, dan nyaman di mata. Umum dipakai untuk novel dan buku bacaan.', 'kertas-bookpaper'],
 	]],
 	'jenis_sampul' => ['Jenis cover', [
-		'soft' => ['Soft cover', 'Sampul kertas tebal yang lentur, dijilid lem panas. Paling umum dipakai.', 'cover-soft'],
+		'soft' => ['Soft cover', 'Sampul kertas tebal yang lentur. Paling umum dipakai dan lebih hemat.', 'cover-soft'],
 		'hard' => ['Hard cover', 'Sampul papan karton keras dilapisi kertas cetak. Kokoh dan eksklusif.', 'cover-hard'],
-		'spiral' => ['Spiral', 'Dijilid ring kawat, buku bisa dibuka rata 360°. Cocok untuk modul dan buku kerja.', 'cover-spiral'],
-		'staples' => ['Staples', 'Dilipat dan dijepret kawat di punggung. Hanya untuk buku tipis (sekitar 60 halaman atau kurang).', 'cover-staples'],
+	]],
+	'jilid' => ['Jenis jilid', [
+		'lem' => ['Lem panas (perfect binding)', 'Halaman direkatkan dengan lem di punggung buku, seperti buku di toko buku.', 'jilid-lem'],
+		'spiral' => ['Spiral', 'Dijilid ring kawat, buku bisa dibuka rata 360°. Cocok untuk modul dan buku kerja.', 'jilid-spiral'],
+		'staples' => ['Staples', 'Dilipat dan dijepret kawat di punggung. Hanya untuk buku tipis (sekitar 60 halaman atau kurang).', 'jilid-staples'],
 	]],
 	'laminasi' => ['Lapisan cover', [
 		'doff' => ['Doff', 'Permukaan tidak mengilap, halus seperti beludru, dan tidak meninggalkan bekas sidik jari.', 'laminasi-doff'],

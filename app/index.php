@@ -7,6 +7,7 @@ require __DIR__ . '/lib/inti.php';
 require __DIR__ . '/lib/tampilan.php';
 require __DIR__ . '/lib/berkas.php';
 require __DIR__ . '/lib/skema.php';
+require __DIR__ . '/lib/harga.php';
 require __DIR__ . '/halaman/publik.php';
 require __DIR__ . '/halaman/akun.php';
 require __DIR__ . '/halaman/pengaju.php';
@@ -59,6 +60,7 @@ $rute = [
 	'#^/admin/buku/(\d+)$#'                 => 'admin_buku_form',
 	'#^/admin/pengguna$#'                   => 'admin_pengguna',
 	'#^/admin/pengaturan$#'                 => 'admin_pengaturan',
+	'#^/admin/harga$#'                      => 'admin_harga',
 	'#^/pasang$#'                           => 'tidak_ditemukan',
 	'#^/([a-z0-9-]+)$#'                     => 'halaman_konten',
 ];

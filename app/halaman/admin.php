@@ -115,11 +115,18 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				foreach (PILIHAN_CETAK as $k => [, $opsi]) {
 					$spek[$k] = isset($opsi[input($k)]) ? input($k) : (string) ($p[$k] ?? '');
 				}
+				$per_buku = (int) preg_replace('/\D/', '', input('harga_per_buku'));
 				$sebelum = ringkas_cetak($p);
-				q('UPDATE pengajuan SET jumlah_cetak = ?, halaman_final = ?, tagihan_2 = ?, rincian_tagihan_2 = ?, ukuran = ?, sisi_cetak = ?, warna_isi = ?, jenis_kertas = ?, jenis_sampul = ?, laminasi = ?, diubah = ? WHERE id = ?', [$jumlah, input('halaman_final'), $tagihan, input('rincian_tagihan_2'), $spek['ukuran'], $spek['sisi_cetak'], $spek['warna_isi'], $spek['jenis_kertas'], $spek['jenis_sampul'], $spek['laminasi'], sekarang(), $pid]);
+				$kolom = array_keys($spek);
+				q('UPDATE pengajuan SET jumlah_cetak = ?, halaman_final = ?, halaman_cetak = ?, gramasi = ?, harga_per_buku = ?, tagihan_2 = ?, rincian_tagihan_2 = ?, ' . implode(' = ?, ', $kolom) . ' = ?, diubah = ? WHERE id = ?',
+					[$jumlah, input('halaman_final'), max(0, (int) input('halaman_cetak')), (int) input('gramasi'), $per_buku, $tagihan, input('rincian_tagihan_2'), ...array_values($spek), ...[sekarang(), $pid]]);
 				$sesudah = ringkas_cetak($spek);
 				if ($sesudah !== $sebelum) {
 					catat($pid, $aid, 'Spesifikasi cetak disesuaikan redaksi menjadi: ' . $sesudah . '.', true);
+				}
+				$harga_jual = (int) preg_replace('/\D/', '', input('harga_cetak'));
+				if ($p['buku_id'] && $harga_jual > 0) {
+					q('UPDATE buku SET harga_cetak = ? WHERE id = ?', [$harga_jual, $p['buku_id']]);
 				}
 				if ($s === 'DITINJAU') {
 					$bid = buat_buku_dari_pengajuan(satu('SELECT * FROM pengajuan WHERE id = ?', [$pid]), input('slug'), (int) preg_replace('/\D/', '', input('harga_cetak')));
@@ -162,25 +169,58 @@ function admin_pengajuan_detail(bool $post, string $id): void
 	$biaya_awal = (int) pengaturan('biaya_awal', '250000');
 	$form = fn (string $aksi, string $isi, string $tombol, string $kelas = 'tombol') => '<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="' . $aksi . '">' . $isi . '<button type="submit" class="' . $kelas . '">' . $tombol . '</button></form>';
 
-	$form_tagihan = function (bool $buat_buku) use ($p, $form) {
+	$form_tagihan = function (bool $buat_buku) use ($p, $form, $buku, $biaya_awal) {
 		$spek = '';
+		$nilai_spek = [];
 		foreach (PILIHAN_CETAK as $k => [$judul, $opsi]) {
-			$nilai = isset($opsi[$p[$k] ?? '']) ? $p[$k] : array_key_first($opsi);
-			$spek .= '<div><label for="spek_' . $k . '">' . e($judul) . '</label><select id="spek_' . $k . '" name="' . $k . '">'
-				. implode('', array_map(fn ($n, $o) => '<option value="' . e((string) $n) . '"' . ((string) $n === (string) $nilai ? ' selected' : '') . '>' . e($o[0]) . '</option>', array_keys($opsi), $opsi))
+			$nilai = isset($opsi[$p[$k] ?? '']) ? (string) $p[$k] : (string) array_key_first($opsi);
+			$nilai_spek[$k] = $nilai;
+			$spek .= '<div><label for="spek_' . $k . '">' . e($judul) . '</label><select id="spek_' . $k . '" name="' . $k . '" data-spek="' . $k . '">'
+				. implode('', array_map(fn ($n, $o) => '<option value="' . e((string) $n) . '"' . ((string) $n === $nilai ? ' selected' : '') . '>' . e($o[0]) . '</option>', array_keys($opsi), $opsi))
 				. '</select></div>';
 		}
-		$isi = '<h4 class="subjudul-form">Spesifikasi cetak</h4><p class="catatan">Sesuai pilihan penulis: <strong>' . e(ringkas_cetak($p)) . '</strong>. Ubah bila disepakati lain dengan penulis.</p><div class="kolom-2">' . $spek . '</div>
-		<h4 class="subjudul-form">Tagihan pelunasan</h4><div class="kolom-2">
-			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. ' . CETAK_MIN . ')</span></label><input type="number" min="' . CETAK_MIN . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . e((string) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta'])) . '"></div>
-			<div><label for="halaman_final">Jumlah halaman final</label><input id="halaman_final" name="halaman_final" placeholder="mis. viii + 180" value="' . e($p['halaman_final']) . '"></div>
-			<div><label for="tagihan_2">Nominal pelunasan (Rp)</label><input id="tagihan_2" name="tagihan_2" inputmode="numeric" required value="' . e($p['tagihan_2'] ?: '') . '"></div>
-			<div><label for="rincian_tagihan_2">Rincian untuk penulis</label><input id="rincian_tagihan_2" name="rincian_tagihan_2" placeholder="mis. 50 eks × Rp45.000 − biaya awal" value="' . e($p['rincian_tagihan_2']) . '"></div>';
+		// Pilihan gramasi untuk kombinasi kertas ini (diperbarui otomatis oleh taksiran.js)
+		$gram = array_column(semua('SELECT gramasi FROM harga_kertas WHERE ukuran=? AND kertas=? AND warna=? AND sisi=? ORDER BY gramasi', [kode_ukuran($nilai_spek['ukuran']), $nilai_spek['jenis_kertas'], $nilai_spek['warna_isi'], $nilai_spek['sisi_cetak']]), 'gramasi');
+		$gram_pilih = in_array((int) $p['gramasi'], array_map('intval', $gram), true) ? (int) $p['gramasi'] : (int) ($gram[0] ?? 0);
+		$opsi_gram = implode('', array_map(fn ($g) => '<option value="' . (int) $g . '"' . ((int) $g === $gram_pilih ? ' selected' : '') . '>' . (int) $g . ' gr</option>', $gram)) ?: '<option value="0">belum ada di daftar harga</option>';
+		$halaman = (int) ($p['halaman_cetak'] ?: hitung_halaman((string) $p['halaman_final']) ?: $p['perkiraan_halaman']);
+		$t = taksiran_cetak($nilai_spek + $p, $halaman, $gram_pilih);
+		$jumlah = (int) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta']);
+		$per_buku = (int) ($p['harga_per_buku'] ?: $t['per_buku']);
+		$data = data_harga();
+		$data['biaya_awal'] = $biaya_awal;
+
+		$isi = '<div data-taksiran>
+		<h4 class="subjudul-form">1. Spesifikasi cetak</h4><p class="catatan">Sesuai pilihan penulis: <strong>' . e(ringkas_cetak($p)) . '</strong>. Ubah bila disepakati lain dengan penulis.</p>
+		<div class="kolom-2">' . $spek . '<div><label for="gramasi">Berat kertas isi</label><select id="gramasi" name="gramasi" data-gramasi>' . $opsi_gram . '</select></div></div>
+
+		<h4 class="subjudul-form">2. Taksiran biaya cetak per buku</h4>
+		<div class="kolom-2">
+			<div><label for="halaman_final">Jumlah halaman final <span class="catatan">(tertulis di buku)</span></label><input id="halaman_final" name="halaman_final" placeholder="mis. xxix + 265" value="' . e($p['halaman_final']) . '" data-halaman-final></div>
+			<div><label for="halaman_cetak">Total halaman dicetak</label><input type="number" min="0" id="halaman_cetak" name="halaman_cetak" value="' . ($halaman ?: '') . '" data-halaman><span class="catatan">Terisi otomatis dari halaman final (Romawi + angka).</span></div>
+		</div>
+		<table class="taksiran">
+			<tr><th>Kertas isi</th><td data-t="rumus">' . e($t['lembar'] . ' ' . ($nilai_spek['sisi_cetak'] === '2' && $data['per_lembar'] ? 'lembar' : 'halaman') . ' × ' . rupiah($t['harga_kertas'])) . '</td><td data-t="isi">' . rupiah($t['isi']) . '</td></tr>
+			<tr><th>Cover &amp; jilid</th><td data-t="rumus-cover">' . e(label_cetak('jenis_sampul', $nilai_spek['jenis_sampul']) . ', ' . label_cetak('jilid', $nilai_spek['jilid']) . ', ' . label_cetak('laminasi', $nilai_spek['laminasi'])) . '</td><td data-t="cover">' . rupiah($t['cover']) . '</td></tr>
+			<tr class="taksiran__total"><th colspan="2">Taksiran harga cetak per buku</th><td data-t="per_buku">' . rupiah($t['per_buku']) . '</td></tr>
+		</table>
+		<p class="pesan pesan--info taksiran__catatan" data-t="catatan"' . ($t['catatan'] ? '' : ' hidden') . '>' . e(implode(' ', $t['catatan'])) . ' Isi harga per buku secara manual atau lengkapi <a href="' . e(url('/admin/harga')) . '">daftar harga</a>.</p>
+
+		<h4 class="subjudul-form">3. Harga dan tagihan pelunasan</h4>
+		<div class="kolom-2">
+			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. ' . CETAK_MIN . ')</span></label><input type="number" min="' . CETAK_MIN . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . $jumlah . '" data-jumlah></div>
+			<div><label for="harga_per_buku">Harga cetak per buku (Rp)</label><input id="harga_per_buku" name="harga_per_buku" inputmode="numeric" value="' . ($per_buku ?: '') . '" data-per-buku' . ($p['harga_per_buku'] ? ' data-manual="1"' : '') . '><button type="button" class="tautan-tombol" data-pakai-taksiran>Pakai taksiran</button></div>
+			<div><label for="tagihan_2">Nominal pelunasan (Rp)</label><input id="tagihan_2" name="tagihan_2" inputmode="numeric" required value="' . e($p['tagihan_2'] ?: '') . '" data-tagihan' . ($p['tagihan_2'] ? ' data-manual="1"' : '') . '>
+				<label class="centang"><input type="checkbox" data-potong> Kurangi biaya awal ' . rupiah($biaya_awal) . '</label></div>
+			<div><label for="rincian_tagihan_2">Rincian untuk penulis</label><input id="rincian_tagihan_2" name="rincian_tagihan_2" placeholder="mis. 5 eks × Rp45.000" value="' . e($p['rincian_tagihan_2']) . '" data-rincian' . ($p['rincian_tagihan_2'] ? ' data-manual="1"' : '') . '></div>
+			<div><label for="harga_cetak">Harga jual di katalog (Rp' . ($buat_buku ? ', opsional' : '') . ')</label><input id="harga_cetak" name="harga_cetak" inputmode="numeric" value="' . e((string) (($buku['harga_cetak'] ?? 0) ?: '')) . '"></div>';
 		if ($buat_buku) {
-			$isi .= '<div><label for="slug">Link halaman buku</label><input id="slug" name="slug" value="' . e(slugify($p['judul'])) . '" pattern="[a-z0-9-]+"><span class="catatan">bookstore.literaindo.com/buku/<em>link</em>/ — tidak boleh diubah setelah dikirim ke Perpusnas</span></div>
-			<div><label for="harga_cetak">Harga jual cetak di katalog (Rp, opsional)</label><input id="harga_cetak" name="harga_cetak" inputmode="numeric"></div>';
+			$isi .= '<div><label for="slug">Link halaman buku</label><input id="slug" name="slug" value="' . e(slugify($p['judul'])) . '" pattern="[a-z0-9-]+"><span class="catatan">bookstore.literaindo.com/buku/<em>link</em>/ — tidak boleh diubah setelah dikirim ke Perpusnas</span></div>';
 		}
-		return $form('tagihan', $isi . '</div>', $buat_buku ? 'Tetapkan Tagihan &amp; Buat Halaman Buku' : 'Perbarui Tagihan');
+		$isi .= '</div><p class="catatan">Nominal pelunasan dan rinciannya terisi otomatis dari harga per buku × jumlah eksemplar. Periksa, ubah bila perlu, lalu simpan untuk mengesahkan.</p></div>
+		<script type="application/json" id="data-harga">' . json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>
+		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=1" defer></script>';
+		return $form('tagihan', $isi, $buat_buku ? 'Tetapkan Tagihan &amp; Buat Halaman Buku' : 'Perbarui Tagihan');
 	};
 	$catatan_input = fn (string $label, string $id) => '<label for="' . $id . '">' . $label . '</label><textarea id="' . $id . '" name="catatan" rows="3"></textarea>';
 
@@ -463,4 +503,143 @@ function admin_pengaturan(bool $post): void
 	</form>
 	<p class="catatan">Nama, alamat, kontak, dan menu website diatur di file <code>app/data/situs.json</code> di GitHub.</p></section>';
 	tampil('Pengaturan', $isi, ['panel' => menu_admin('/admin/pengaturan')]);
+}
+
+/** Kode harga seperti di daftar harga Excel, mis. A5_HVS_HITAM PUTIH_2SISI_80gr. */
+function kode_kertas(array $r): string
+{
+	return $r['ukuran'] . '_' . ($r['kertas'] === 'hvs' ? 'HVS' : 'BP') . '_' . ($r['warna'] === 'warna' ? 'WARNA' : 'HITAM PUTIH') . '_' . $r['sisi'] . 'SISI_' . (int) $r['gramasi'] . 'gr';
+}
+
+function kode_cover(array $r): string
+{
+	return label_cetak('jenis_sampul', $r['sampul']) . ' ' . $r['ukuran'] . '_' . ucfirst($r['jilid']) . '_' . label_cetak('laminasi', $r['laminasi']);
+}
+
+function admin_harga(bool $post): void
+{
+	wajib_masuk('admin');
+	$ukuran = ['A5', 'B5', 'A4'];
+	if ($post) {
+		$aksi = $_POST['aksi'] ?? '';
+		$uang = fn ($v) => (int) preg_replace('/\D/', '', (string) $v);
+		try {
+			if ($aksi === 'cara_hitung') {
+				simpan_pengaturan('harga_kertas_per', input('harga_kertas_per') === 'halaman' ? 'halaman' : 'lembar');
+				pesan('Cara menghitung harga kertas disimpan.');
+			} elseif ($aksi === 'simpan_kertas' || $aksi === 'simpan_cover') {
+				$tabel = $aksi === 'simpan_kertas' ? 'harga_kertas' : 'harga_cover';
+				$hapus = array_map('intval', array_keys((array) ($_POST['hapus'] ?? [])));
+				$n = 0;
+				foreach ((array) ($_POST['harga'] ?? []) as $id => $harga) {
+					$id = (int) $id;
+					if (in_array($id, $hapus, true)) {
+						q("DELETE FROM $tabel WHERE id = ?", [$id]);
+						continue;
+					}
+					if ($tabel === 'harga_kertas') {
+						$g = (int) ($_POST['gramasi'][$id] ?? 0);
+						$n += q('UPDATE harga_kertas SET harga = ?, gramasi = ? WHERE id = ? AND (harga <> ? OR gramasi <> ?)', [$uang($harga), $g, $id, $uang($harga), $g])->rowCount();
+					} else {
+						$n += q('UPDATE harga_cover SET harga = ? WHERE id = ? AND harga <> ?', [$uang($harga), $id, $uang($harga)])->rowCount();
+					}
+				}
+				pesan($n . ' harga diperbarui' . ($hapus ? ', ' . count($hapus) . ' baris dihapus' : '') . '.');
+			} elseif ($aksi === 'tambah_kertas') {
+				$r = [in_array(input('ukuran'), $ukuran, true) ? input('ukuran') : 'A5', input('kertas') === 'bookpaper' ? 'bookpaper' : 'hvs', input('warna') === 'warna' ? 'warna' : 'hitam_putih', input('sisi') === '1' ? '1' : '2', (int) input('gramasi')];
+				$harga = $uang(input('harga'));
+				if ($r[4] < 1 || $harga < 1) {
+					throw new RuntimeException('Isi berat kertas dan harga.');
+				}
+				$ada = satu('SELECT id FROM harga_kertas WHERE ukuran=? AND kertas=? AND warna=? AND sisi=? AND gramasi=?', $r);
+				$ada ? q('UPDATE harga_kertas SET harga = ? WHERE id = ?', [$harga, $ada['id']]) : q('INSERT INTO harga_kertas (ukuran, kertas, warna, sisi, gramasi, harga) VALUES (?,?,?,?,?,?)', [...$r, $harga]);
+				pesan(($ada ? 'Harga diperbarui: ' : 'Harga ditambahkan: ') . kode_kertas(['ukuran' => $r[0], 'kertas' => $r[1], 'warna' => $r[2], 'sisi' => $r[3], 'gramasi' => $r[4]]));
+			} elseif ($aksi === 'tambah_cover') {
+				$r = [in_array(input('ukuran'), $ukuran, true) ? input('ukuran') : 'A5', input('sampul') === 'hard' ? 'hard' : 'soft', isset(PILIHAN_CETAK['jilid'][1][input('jilid')]) ? input('jilid') : 'lem', input('laminasi') === 'glossy' ? 'glossy' : 'doff'];
+				$harga = $uang(input('harga'));
+				if ($harga < 1) {
+					throw new RuntimeException('Isi harga cover.');
+				}
+				$ada = satu('SELECT id FROM harga_cover WHERE ukuran=? AND sampul=? AND jilid=? AND laminasi=?', $r);
+				$ada ? q('UPDATE harga_cover SET harga = ? WHERE id = ?', [$harga, $ada['id']]) : q('INSERT INTO harga_cover (ukuran, sampul, jilid, laminasi, harga) VALUES (?,?,?,?,?)', [...$r, $harga]);
+				pesan(($ada ? 'Harga diperbarui: ' : 'Harga ditambahkan: ') . kode_cover(['ukuran' => $r[0], 'sampul' => $r[1], 'jilid' => $r[2], 'laminasi' => $r[3]]));
+			}
+		} catch (RuntimeException $ex) {
+			pesan($ex->getMessage(), 'galat');
+		}
+		arahkan('/admin/harga' . ($aksi && str_contains($aksi, 'cover') ? '#cover' : '#kertas'));
+	}
+
+	$data = data_harga();
+	$opsi = fn (array $pilihan, string $nama) => '<select name="' . $nama . '">' . implode('', array_map(fn ($v, $l) => '<option value="' . e((string) $v) . '">' . e($l) . '</option>', array_keys($pilihan), $pilihan)) . '</select>';
+	$uk = array_combine($ukuran, $ukuran);
+
+	$baris_kertas = '';
+	$grup = '';
+	foreach ($data['kertas'] as $r) {
+		$g = $r['ukuran'] . ' · ' . label_cetak('warna_isi', $r['warna']);
+		if ($g !== $grup) {
+			$baris_kertas .= '<tr class="tabel-harga__grup"><th colspan="6">' . e($g) . '</th></tr>';
+			$grup = $g;
+		}
+		$id = (int) $r['id'];
+		$baris_kertas .= '<tr><td class="tabel-harga__kode">' . e(kode_kertas($r)) . '</td><td>' . e(label_cetak('jenis_kertas', $r['kertas'])) . '</td><td>' . e($r['sisi']) . ' sisi</td>'
+			. '<td><input class="isian-kecil" name="gramasi[' . $id . ']" inputmode="numeric" value="' . $r['gramasi'] . '" aria-label="Berat kertas ' . e(kode_kertas($r)) . '"> gr</td>'
+			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_kertas($r)) . '"></td>'
+			. '<td><label class="hapus-baris"><input type="checkbox" name="hapus[' . $id . ']" value="1"> Hapus</label></td></tr>';
+	}
+	$baris_cover = '';
+	$grup = '';
+	foreach ($data['cover'] as $r) {
+		if ($r['ukuran'] !== $grup) {
+			$baris_cover .= '<tr class="tabel-harga__grup"><th colspan="4">' . e($r['ukuran']) . '</th></tr>';
+			$grup = $r['ukuran'];
+		}
+		$id = (int) $r['id'];
+		$baris_cover .= '<tr><td class="tabel-harga__kode">' . e(kode_cover($r)) . '</td><td>' . e(label_cetak('jilid', $r['jilid'])) . '</td>'
+			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_cover($r)) . '"></td>'
+			. '<td><label class="hapus-baris"><input type="checkbox" name="hapus[' . $id . ']" value="1"> Hapus</label></td></tr>';
+	}
+	$f = fn (string $aksi) => '<input type="hidden" name="aksi" value="' . $aksi . '">' . csrf_field();
+	$warna = array_map(fn ($o) => $o[0], PILIHAN_CETAK['warna_isi'][1]);
+	$kertas = array_map(fn ($o) => $o[0], PILIHAN_CETAK['jenis_kertas'][1]);
+	$per = $data['per_lembar'];
+
+	$isi = '<section class="panel"><h1>Harga Cetak</h1>
+	<p class="catatan">Daftar harga ini dipakai untuk menaksir harga cetak per buku di form tagihan pelunasan. Ubah angkanya kapan saja; tagihan yang sudah ditetapkan tidak ikut berubah.</p>
+
+	<form method="post" class="formulir formulir--lebar kotak-cara">' . $f('cara_hitung') . '
+		<fieldset><legend>Cara menghitung harga kertas cetak 2 sisi</legend>
+			<label class="centang"><input type="radio" name="harga_kertas_per" value="lembar"' . ($per ? ' checked' : '') . '> <strong>Per lembar</strong>: jumlah halaman ÷ 2 × harga 2SISI (buku 200 halaman = 100 lembar)</label>
+			<label class="centang"><input type="radio" name="harga_kertas_per" value="halaman"' . ($per ? '' : ' checked') . '> <strong>Per halaman</strong>: jumlah halaman × harga 2SISI</label>
+			<p class="catatan">Cetak 1 sisi selalu dihitung per halaman.</p>
+		</fieldset>
+		<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Simpan cara hitung</button></div>
+	</form>
+
+	<h2 id="kertas">Harga kertas isi (per ' . ($per ? 'lembar' : 'halaman') . ')</h2>
+	<form method="post" class="formulir formulir--lebar">' . $f('simpan_kertas') . '
+		<div class="tabel-wadah"><table class="tabel tabel-harga"><thead><tr><th>Kode</th><th>Kertas</th><th>Sisi</th><th>Berat</th><th>Harga (Rp)</th><th></th></tr></thead><tbody>' . $baris_kertas . '</tbody></table></div>
+		<div class="formulir__tombol"><button class="tombol" type="submit">Simpan harga kertas</button></div>
+	</form>
+	<details class="tambah-harga"><summary>Tambah harga kertas</summary>
+		<form method="post" class="formulir formulir--lebar">' . $f('tambah_kertas') . '<div class="baris-tambah">
+			<label>Ukuran ' . $opsi($uk, 'ukuran') . '</label><label>Kertas ' . $opsi($kertas, 'kertas') . '</label><label>Warna ' . $opsi($warna, 'warna') . '</label><label>Sisi ' . $opsi(['1' => '1 sisi', '2' => '2 sisi'], 'sisi') . '</label>
+			<label>Berat (gr) <input name="gramasi" inputmode="numeric" required></label><label>Harga (Rp) <input name="harga" inputmode="numeric" required></label></div>
+			<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Tambah</button></div><p class="catatan">Jika kombinasinya sudah ada, harganya diperbarui.</p></form>
+	</details>
+
+	<h2 id="cover">Harga cover dan jilid (per buku)</h2>
+	<form method="post" class="formulir formulir--lebar">' . $f('simpan_cover') . '
+		<div class="tabel-wadah"><table class="tabel tabel-harga"><thead><tr><th>Jenis cover</th><th>Jilid</th><th>Harga (Rp)</th><th></th></tr></thead><tbody>' . $baris_cover . '</tbody></table></div>
+		<div class="formulir__tombol"><button class="tombol" type="submit">Simpan harga cover</button></div>
+	</form>
+	<details class="tambah-harga"><summary>Tambah harga cover</summary>
+		<form method="post" class="formulir formulir--lebar">' . $f('tambah_cover') . '<div class="baris-tambah">
+			<label>Ukuran ' . $opsi($uk, 'ukuran') . '</label><label>Cover ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['jenis_sampul'][1]), 'sampul') . '</label><label>Jilid ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['jilid'][1]), 'jilid') . '</label><label>Lapisan ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['laminasi'][1]), 'laminasi') . '</label>
+			<label>Harga (Rp) <input name="harga" inputmode="numeric" required></label></div>
+			<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Tambah</button></div><p class="catatan">Contoh: tambahkan harga untuk jilid staples bila Anda menyediakannya.</p></form>
+	</details>
+	</section>';
+	tampil('Harga Cetak', $isi, ['panel' => menu_admin('/admin/harga')]);
 }
