@@ -22,7 +22,7 @@ function skema_notifikasi(string $driver): string
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 3) {
+	if ($versi >= 4) {
 		return;
 	}
 	if ($versi < 2) {
@@ -34,7 +34,13 @@ function pastikan_skema(): void
 	} catch (PDOException) {
 		db()->exec("ALTER TABLE pengajuan ADD COLUMN jenis_karya VARCHAR(20) NOT NULL DEFAULT 'asli'");
 	}
-	simpan_pengaturan('versi_skema', '3');
+	// v4: siapa yang memverifikasi pembayaran
+	try {
+		db()->query('SELECT pemeriksa_id FROM pembayaran LIMIT 1');
+	} catch (PDOException) {
+		db()->exec('ALTER TABLE pembayaran ADD COLUMN pemeriksa_id ' . ((config()['db']['driver'] ?? 'mysql') === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED') . ' NULL');
+	}
+	simpan_pengaturan('versi_skema', '4');
 }
 
 function skema(string $driver): array
@@ -122,6 +128,7 @@ function skema(string $driver): array
 			catatan VARCHAR(500) NOT NULL DEFAULT '',
 			dibuat DATETIME NOT NULL,
 			diverifikasi DATETIME NULL,
+			pemeriksa_id $fk NULL,
 			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
 		)$akhir",
 		"CREATE TABLE catatan (

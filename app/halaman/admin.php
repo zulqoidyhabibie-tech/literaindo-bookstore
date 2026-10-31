@@ -97,22 +97,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				kirim_email($pemilik['email'], 'Pesan baru untuk pengajuan "' . $p['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin Literaindo Press mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/pengajuan/$pid"));
 				pesan('Pesan terkirim.');
 			} elseif (in_array($aksi, ['terima_bayar', 'tolak_bayar'], true) && in_array($s, ['VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2'], true)) {
-				$tahap = $s === 'VERIFIKASI_BAYAR_1' ? 1 : 2;
-				$bayar = satu("SELECT * FROM pembayaran WHERE pengajuan_id = ? AND tahap = ? AND status = 'menunggu' ORDER BY id DESC LIMIT 1", [$pid, $tahap]);
-				if ($aksi === 'terima_bayar') {
-					if ($bayar) {
-						q("UPDATE pembayaran SET status = 'diterima', diverifikasi = ? WHERE id = ?", [sekarang(), $bayar['id']]);
-					}
-					ubah_status($p, $tahap === 1 ? 'DITINJAU' : 'LUNAS', 'Pembayaran tahap ' . $tahap . ' diterima.');
-				} else {
-					if ($catatan === '') {
-						throw new RuntimeException('Tulis alasan penolakan bukti bayar.');
-					}
-					if ($bayar) {
-						q("UPDATE pembayaran SET status = 'ditolak', catatan = ?, diverifikasi = ? WHERE id = ?", [$catatan, sekarang(), $bayar['id']]);
-					}
-					ubah_status($p, 'MENUNGGU_BAYAR_' . $tahap, 'Bukti bayar ditolak: ' . $catatan);
-				}
+				verifikasi_bayar($p, $aksi === 'terima_bayar', $catatan);
 				pesan('Status pembayaran diperbarui.');
 			} elseif ($aksi === 'revisi' && $s === 'DITINJAU') {
 				if ($catatan === '') {
@@ -191,9 +176,9 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		'DRAF' => '<p>Penulis belum mengirim pengajuan.</p>',
 		'MENUNGGU_BAYAR_1' => '<p>Menunggu penulis membayar biaya awal ' . rupiah($biaya_awal) . '.</p>',
 		'MENUNGGU_BAYAR_2' => '<p>Menunggu penulis membayar pelunasan ' . rupiah($p['tagihan_2']) . '.</p><details><summary>Ubah tagihan</summary>' . $form_tagihan(false) . '</details>',
-		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => $bukti($p['status'] === 'VERIFIKASI_BAYAR_1' ? 1 : 2)
-			. '<p class="catatan">Cocokkan dengan mutasi QRIS sebelum menerima.</p><div class="aksi-baris">' . $form('terima_bayar', '', 'Terima Pembayaran')
-			. '<details><summary>Tolak bukti bayar</summary>' . $form('tolak_bayar', $catatan_input('Alasan (dikirim ke penulis)', 'c-tolak-bayar'), 'Tolak Bukti', 'tombol tombol--bahaya') . '</details></div>',
+		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => '<p>Bukti bayar sedang menunggu verifikasi oleh <strong>bagian keuangan</strong> di <a href="' . e(url('/keuangan')) . '">Panel Keuangan</a>.</p>' . $bukti($p['status'] === 'VERIFIKASI_BAYAR_1' ? 1 : 2)
+			. '<details><summary>Verifikasi sendiri sebagai admin</summary><p class="catatan">Gunakan hanya jika bagian keuangan berhalangan. Cocokkan dengan mutasi rekening/QRIS sebelum menerima.</p><div class="aksi-baris">' . $form('terima_bayar', '', 'Terima Pembayaran')
+			. '<details><summary>Tolak bukti bayar</summary>' . $form('tolak_bayar', $catatan_input('Alasan (dikirim ke penulis)', 'c-tolak-bayar'), 'Tolak Bukti', 'tombol tombol--bahaya') . '</details></div></details>',
 		'DITINJAU' => '<h3>Setelah naskah siap: tetapkan tagihan pelunasan</h3><p class="catatan">Halaman buku akan dibuat di katalog (Segera Terbit) agar linknya bisa dipakai untuk pengajuan ISBN. Penulis membayar pelunasan setelah ISBN terbit.</p>' . $form_tagihan(true)
 			. '<details><summary>Minta revisi ke penulis</summary>' . $form('revisi', $catatan_input('Catatan revisi', 'c-revisi'), 'Kirim Permintaan Revisi', 'tombol tombol--kedua') . '</details>',
 		'PERLU_REVISI' => '<p>Menunggu penulis mengirim naskah revisi.</p>',

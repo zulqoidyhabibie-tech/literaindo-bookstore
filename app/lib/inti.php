@@ -15,12 +15,12 @@ $SITUS = json_decode((string) file_get_contents(APP_DIR . '/data/situs.json'), t
 const STATUS = [
 	'DRAF'               => ['Draf', 'Formulir belum dikirim', 'pengaju'],
 	'MENUNGGU_BAYAR_1'   => ['Menunggu biaya awal', 'Silakan bayar biaya awal', 'pengaju'],
-	'VERIFIKASI_BAYAR_1' => ['Verifikasi biaya awal', 'Bukti bayar sedang dicek admin', 'admin'],
+	'VERIFIKASI_BAYAR_1' => ['Verifikasi biaya awal', 'Bukti bayar sedang dicek bagian keuangan', 'admin'],
 	'DITINJAU'           => ['Ditinjau redaksi', 'Naskah sedang diproses redaksi', 'admin'],
 	'PERLU_REVISI'       => ['Perlu revisi', 'Ada catatan dari redaksi; unggah naskah perbaikan', 'pengaju'],
 	'PROSES_ISBN'        => ['Proses ISBN', 'Sedang diajukan ke Perpusnas', 'admin'],
 	'MENUNGGU_BAYAR_2'   => ['Menunggu pelunasan', 'ISBN sudah terbit; silakan bayar pelunasan', 'pengaju'],
-	'VERIFIKASI_BAYAR_2' => ['Verifikasi pelunasan', 'Bukti pelunasan sedang dicek admin', 'admin'],
+	'VERIFIKASI_BAYAR_2' => ['Verifikasi pelunasan', 'Bukti pelunasan sedang dicek bagian keuangan', 'admin'],
 	'LUNAS'              => ['Lunas, antre cetak', 'Pelunasan diterima, buku masuk antrean cetak', 'admin'],
 	'SELESAI'            => ['Selesai', 'Buku sudah dicetak dan dikirim', ''],
 	'DITOLAK'            => ['Ditolak', 'Pengajuan tidak dapat diproses', ''],
@@ -305,11 +305,18 @@ function notif_admin(string $pesan, string $tautan = ''): void
 	}
 }
 
+function notif_keuangan(string $pesan, string $tautan = '/keuangan'): void
+{
+	foreach (semua("SELECT id FROM pengguna WHERE peran = 'keuangan'") as $a) {
+		notif((int) $a['id'], $pesan, $tautan);
+	}
+}
+
 /** Beri tahu pihak lawan: penulis bila admin yang bertindak, admin bila penulis yang bertindak. */
 function notif_pengajuan(array $p, string $pesan): void
 {
 	$u = pengguna();
-	if ($u && $u['peran'] !== 'admin') {
+	if ($u && $u['peran'] === 'pengaju') {
 		notif_admin('"' . $p['judul'] . '" (' . $u['nama'] . '): ' . $pesan, '/admin/pengajuan/' . $p['id']);
 	} else {
 		notif((int) $p['pengguna_id'], '"' . $p['judul'] . '": ' . $pesan, '/akun/pengajuan/' . $p['id']);
