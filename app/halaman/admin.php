@@ -209,8 +209,9 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			<tr><th>Total cetak</th><td data-b="n-total">-</td><td data-b="total">-</td></tr>
 			<tr><th>Kiriman ke penulis</th><td data-b="n-penulis">-</td><td data-b="penulis">-</td></tr>
 			<tr><th>Wajib serah ke Perpusnas</th><td>2 eks + kemasan</td><td data-b="perpusnas">-</td></tr>
+			<tr><th>Wajib serah ke Perpusda</th><td>1 eks + kemasan</td><td data-b="perpusda">-</td></tr>
 		</table>
-		<p class="catatan">Berat adalah taksiran untuk ongkir: kertas (luas × gramasi), cover, dan kemasan ±100 g per kiriman. Kurir membulatkan ke atas per kg. Buku untuk Perpusda dan arsip penerbit tidak dikirim.</p>
+		<p class="catatan">Berat adalah taksiran untuk ongkir: kertas (luas × gramasi), cover, dan kemasan ±100 g per kiriman. Kurir membulatkan ke atas per kg. Buku arsip penerbit tidak dikirim.</p>
 		<p class="pesan pesan--info taksiran__catatan" data-t="catatan"' . ($t['catatan'] ? '' : ' hidden') . '>' . e(implode(' ', $t['catatan'])) . ' Isi harga per buku secara manual atau lengkapi <a href="' . e(url('/admin/harga')) . '">daftar harga</a>.</p>
 
 		<h4 class="subjudul-form">3. Harga dan tagihan pelunasan</h4>
@@ -226,7 +227,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		}
 		$isi .= '</div><p class="catatan">Nominal pelunasan dan rinciannya terisi otomatis dari harga per buku × jumlah eksemplar. Periksa, ubah bila perlu, lalu simpan untuk mengesahkan.</p></div>
 		<script type="application/json" id="data-harga">' . json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>
-		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=2" defer></script>';
+		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=3" defer></script>';
 		return $form('tagihan', $isi, $buat_buku ? 'Tetapkan Tagihan &amp; Buat Halaman Buku' : 'Perbarui Tagihan');
 	};
 	$catatan_input = fn (string $label, string $id) => '<label for="' . $id . '">' . $label . '</label><textarea id="' . $id . '" name="catatan" rows="3"></textarea>';

@@ -77,6 +77,7 @@
 		tulis('n-penulis', penulis + ' eks + kemasan');
 		tulis('penulis', halaman && penulis ? bulat(buku * penulis + KEMASAN) : '-');
 		tulis('perpusnas', halaman ? bulat(buku * DEPOSIT + KEMASAN) : '-');
+		tulis('perpusda', halaman ? bulat(buku + KEMASAN) : '-');
 	}
 
 	function hitungTagihan() {
