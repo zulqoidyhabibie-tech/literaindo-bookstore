@@ -97,22 +97,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				kirim_email($pemilik['email'], 'Pesan baru untuk pengajuan "' . $p['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin Literaindo Press mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/pengajuan/$pid"));
 				pesan('Pesan terkirim.');
 			} elseif (in_array($aksi, ['terima_bayar', 'tolak_bayar'], true) && in_array($s, ['VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2'], true)) {
-				$tahap = $s === 'VERIFIKASI_BAYAR_1' ? 1 : 2;
-				$bayar = satu("SELECT * FROM pembayaran WHERE pengajuan_id = ? AND tahap = ? AND status = 'menunggu' ORDER BY id DESC LIMIT 1", [$pid, $tahap]);
-				if ($aksi === 'terima_bayar') {
-					if ($bayar) {
-						q("UPDATE pembayaran SET status = 'diterima', diverifikasi = ? WHERE id = ?", [sekarang(), $bayar['id']]);
-					}
-					ubah_status($p, $tahap === 1 ? 'DITINJAU' : 'LUNAS', 'Pembayaran tahap ' . $tahap . ' diterima.');
-				} else {
-					if ($catatan === '') {
-						throw new RuntimeException('Tulis alasan penolakan bukti bayar.');
-					}
-					if ($bayar) {
-						q("UPDATE pembayaran SET status = 'ditolak', catatan = ?, diverifikasi = ? WHERE id = ?", [$catatan, sekarang(), $bayar['id']]);
-					}
-					ubah_status($p, 'MENUNGGU_BAYAR_' . $tahap, 'Bukti bayar ditolak: ' . $catatan);
-				}
+				verifikasi_bayar($p, $aksi === 'terima_bayar', $catatan);
 				pesan('Status pembayaran diperbarui.');
 			} elseif ($aksi === 'revisi' && $s === 'DITINJAU') {
 				if ($catatan === '') {
@@ -191,9 +176,9 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		'DRAF' => '<p>Penulis belum mengirim pengajuan.</p>',
 		'MENUNGGU_BAYAR_1' => '<p>Menunggu penulis membayar biaya awal ' . rupiah($biaya_awal) . '.</p>',
 		'MENUNGGU_BAYAR_2' => '<p>Menunggu penulis membayar pelunasan ' . rupiah($p['tagihan_2']) . '.</p><details><summary>Ubah tagihan</summary>' . $form_tagihan(false) . '</details>',
-		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => $bukti($p['status'] === 'VERIFIKASI_BAYAR_1' ? 1 : 2)
-			. '<p class="catatan">Cocokkan dengan mutasi QRIS sebelum menerima.</p><div class="aksi-baris">' . $form('terima_bayar', '', 'Terima Pembayaran')
-			. '<details><summary>Tolak bukti bayar</summary>' . $form('tolak_bayar', $catatan_input('Alasan (dikirim ke penulis)', 'c-tolak-bayar'), 'Tolak Bukti', 'tombol tombol--bahaya') . '</details></div>',
+		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => '<p>Bukti bayar sedang menunggu verifikasi oleh <strong>bagian keuangan</strong> di <a href="' . e(url('/keuangan')) . '">Panel Keuangan</a>.</p>' . $bukti($p['status'] === 'VERIFIKASI_BAYAR_1' ? 1 : 2)
+			. '<details><summary>Verifikasi sendiri sebagai admin</summary><p class="catatan">Gunakan hanya jika bagian keuangan berhalangan. Cocokkan dengan mutasi rekening/QRIS sebelum menerima.</p><div class="aksi-baris">' . $form('terima_bayar', '', 'Terima Pembayaran')
+			. '<details><summary>Tolak bukti bayar</summary>' . $form('tolak_bayar', $catatan_input('Alasan (dikirim ke penulis)', 'c-tolak-bayar'), 'Tolak Bukti', 'tombol tombol--bahaya') . '</details></div></details>',
 		'DITINJAU' => '<h3>Setelah naskah siap: tetapkan tagihan pelunasan</h3><p class="catatan">Halaman buku akan dibuat di katalog (Segera Terbit) agar linknya bisa dipakai untuk pengajuan ISBN. Penulis membayar pelunasan setelah ISBN terbit.</p>' . $form_tagihan(true)
 			. '<details><summary>Minta revisi ke penulis</summary>' . $form('revisi', $catatan_input('Catatan revisi', 'c-revisi'), 'Kirim Permintaan Revisi', 'tombol tombol--kedua') . '</details>',
 		'PERLU_REVISI' => '<p>Menunggu penulis mengirim naskah revisi.</p>',
@@ -370,12 +355,28 @@ function admin_buku_form(bool $post, string $id = ''): void
 function admin_pengguna(bool $post): void
 {
 	$admin = wajib_masuk('admin');
+	if ($post && ($_POST['aksi'] ?? '') === 'tambah') {
+		$email = mb_strtolower(input('email'));
+		$sandi = (string) ($_POST['sandi'] ?? '');
+		$peran = isset(PERAN[input('peran')]) ? input('peran') : 'keuangan';
+		if (mb_strlen(input('nama')) < 3 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+			pesan('Isi nama dan email yang benar.', 'galat');
+		} elseif (strlen($sandi) < 8) {
+			pesan('Kata sandi minimal 8 karakter.', 'galat');
+		} elseif (satu('SELECT id FROM pengguna WHERE email = ?', [$email])) {
+			pesan('Email ini sudah terdaftar. Ubah perannya di tabel di bawah.', 'galat');
+		} else {
+			q('INSERT INTO pengguna (nama, email, whatsapp, sandi, peran, dibuat) VALUES (?, ?, ?, ?, ?, ?)', [input('nama'), $email, preg_replace('/[^0-9+]/', '', input('whatsapp')), password_hash($sandi, PASSWORD_DEFAULT), $peran, sekarang()]);
+			pesan('Akun ' . PERAN[$peran] . ' untuk ' . input('nama') . ' dibuat. Berikan email dan kata sandinya; pengguna bisa menggantinya di menu Profil.');
+		}
+		arahkan('/admin/pengguna');
+	}
 	if ($post) {
 		$uid = (int) input('uid');
 		$target = satu('SELECT * FROM pengguna WHERE id = ?', [$uid]);
 		if ($target) {
 			if (($_POST['aksi'] ?? '') === 'peran' && $uid !== (int) $admin['id']) {
-				q('UPDATE pengguna SET peran = ? WHERE id = ?', [input('peran') === 'admin' ? 'admin' : 'pengaju', $uid]);
+				q('UPDATE pengguna SET peran = ? WHERE id = ?', [isset(PERAN[input('peran')]) ? input('peran') : 'pengaju', $uid]);
 				pesan('Peran ' . $target['nama'] . ' diperbarui.');
 			} elseif (($_POST['aksi'] ?? '') === 'sandi') {
 				$baru = (string) ($_POST['sandi'] ?? '');
@@ -393,10 +394,23 @@ function admin_pengguna(bool $post): void
 	foreach (semua('SELECT u.*, (SELECT COUNT(*) FROM pengajuan p WHERE p.pengguna_id = u.id) AS jml FROM pengguna u ORDER BY u.dibuat DESC') as $r) {
 		$diri = (int) $r['id'] === (int) $admin['id'];
 		$baris .= '<tr><td><strong>' . e($r['nama']) . '</strong><br><span class="catatan">' . e($r['email']) . ' · ' . e($r['whatsapp']) . '</span></td><td class="angka">' . (int) $r['jml'] . '</td><td>'
-			. ($diri ? 'Admin (Anda)' : '<form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="peran"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="peran-' . $r['id'] . '">Peran</label><select id="peran-' . $r['id'] . '" name="peran"><option value="pengaju"' . ($r['peran'] === 'pengaju' ? ' selected' : '') . '>Pengaju</option><option value="admin"' . ($r['peran'] === 'admin' ? ' selected' : '') . '>Admin</option></select><button class="tombol tombol--kecil" type="submit">Simpan</button></form>')
+			. ($diri ? 'Admin (Anda)' : '<form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="peran"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="peran-' . $r['id'] . '">Peran</label><select id="peran-' . $r['id'] . '" name="peran">' . implode('', array_map(fn ($k, $l) => '<option value="' . $k . '"' . ($r['peran'] === $k ? ' selected' : '') . '>' . e($l) . '</option>', array_keys(PERAN), PERAN)) . '</select><button class="tombol tombol--kecil" type="submit">Simpan</button></form>')
 			. '</td><td><details><summary>Atur ulang sandi</summary><form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="sandi"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="sandi-' . $r['id'] . '">Sandi baru</label><input type="text" id="sandi-' . $r['id'] . '" name="sandi" minlength="8" placeholder="Sandi baru"><button class="tombol tombol--kecil" type="submit">Ganti</button></form></details></td></tr>';
 	}
-	$isi = '<section class="panel"><h1>Pengguna</h1><div class="tabel-wadah"><table class="tabel"><thead><tr><th>Nama</th><th>Pengajuan</th><th>Peran</th><th>Kata sandi</th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
+	$isi = '<section class="panel"><h1>Pengguna</h1>
+	<details class="kotak-langkah"><summary>Tambah akun (keuangan / admin)</summary>
+		<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="tambah">
+			<div class="kolom-2">
+				<div><label for="t-nama">Nama</label><input id="t-nama" name="nama" required></div>
+				<div><label for="t-email">Email (untuk masuk)</label><input type="email" id="t-email" name="email" required></div>
+				<div><label for="t-wa">Nomor WhatsApp</label><input id="t-wa" name="whatsapp" inputmode="tel"></div>
+				<div><label for="t-sandi">Kata sandi awal (min. 8 karakter)</label><input type="text" id="t-sandi" name="sandi" minlength="8" required></div>
+				<div><label for="t-peran">Peran</label><select id="t-peran" name="peran"><option value="keuangan">Keuangan: lihat &amp; unduh data transaksi</option><option value="admin">Admin: akses penuh</option></select></div>
+			</div>
+			<button type="submit" class="tombol">Buat Akun</button>
+		</form>
+	</details>
+	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Nama</th><th>Pengajuan</th><th>Peran</th><th>Kata sandi</th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
 	tampil('Pengguna', $isi, ['panel' => menu_admin('/admin/pengguna')]);
 }
 

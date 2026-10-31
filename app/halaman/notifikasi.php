@@ -28,8 +28,7 @@ function halaman_notifikasi(bool $post): void
 		. ($belum ? '<form method="post">' . csrf_field() . '<input type="hidden" name="aksi" value="baca_semua"><button type="submit" class="tombol tombol--kedua tombol--kecil">Tandai semua dibaca</button></form>' : '') . '</div>
 	' . ($li ? '<ul class="daftar-notif">' . $li . '</ul>' : '<p class="kosong">Belum ada notifikasi.</p>') . '
 </section>';
-	$menu = $u['peran'] === 'admin' ? menu_admin('') : menu_pengaju('');
-	tampil('Notifikasi', $isi, ['panel' => $menu]);
+	tampil('Notifikasi', $isi, ['panel' => menu_peran($u)]);
 }
 
 function notifikasi_buka(bool $post, string $id): void

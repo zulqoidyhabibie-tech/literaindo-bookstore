@@ -749,6 +749,86 @@ main {
 	display: none;
 }
 
+.kotak-status-grid.kotak-status-grid--uang {
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.kotak-status-grid--uang .kotak-status__angka {
+	font-size: 1.3rem;
+	overflow-wrap: anywhere;
+}
+
+.panel--verifikasi {
+	margin-bottom: 1rem;
+	border-top: 4px solid var(--aksen);
+}
+
+.panel--verifikasi h2 {
+	font-size: 1.3rem;
+}
+
+.daftar-verifikasi {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0.6rem;
+}
+
+.verifikasi {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem 1.5rem;
+	justify-content: space-between;
+	align-items: flex-start;
+	padding: 0.9rem 1rem;
+	border: 1px solid #ecd6a6;
+	border-radius: var(--sudut);
+	background: #fffaf0;
+}
+
+.verifikasi__info {
+	display: grid;
+	gap: 0.1rem;
+	min-width: 0;
+}
+
+.verifikasi__info .catatan {
+	margin: 0;
+}
+
+.verifikasi__aksi {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: flex-start;
+}
+
+.verifikasi__aksi details > summary {
+	margin: 0.4rem 0 0;
+	color: #b3261e;
+}
+
+.verifikasi__aksi details[open] {
+	flex-basis: 100%;
+}
+
+.filter--keuangan {
+	align-items: flex-end;
+}
+
+.filter--keuangan label {
+	display: grid;
+	gap: 0.2rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	flex: 1 1 10rem;
+}
+
+.filter--keuangan .tombol {
+	flex: none;
+}
+
 .daftar-notif {
 	list-style: none;
 	margin: 0;

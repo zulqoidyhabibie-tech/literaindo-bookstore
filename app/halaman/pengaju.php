@@ -28,8 +28,8 @@ function pengajuan_milik(int $id, array $u): array
 function pengaju_daftar(bool $post): void
 {
 	$u = wajib_masuk();
-	if ($u['peran'] === 'admin') {
-		arahkan('/admin');
+	if ($u['peran'] !== 'pengaju') {
+		arahkan(beranda_peran($u['peran']));
 	}
 	$daftar = semua('SELECT * FROM pengajuan WHERE pengguna_id = ? ORDER BY diubah DESC', [$u['id']]);
 	if (!$daftar) {
@@ -51,7 +51,7 @@ function pengaju_daftar(bool $post): void
 
 function pengaju_baru(bool $post): void
 {
-	$u = wajib_masuk();
+	$u = wajib_masuk(['pengaju', 'admin']);
 	formulir_pengajuan($u, null, $post);
 }
 
@@ -257,7 +257,7 @@ function riwayat(int $id): string
 {
 	$out = '';
 	foreach (semua('SELECT c.*, u.nama, u.peran FROM catatan c LEFT JOIN pengguna u ON u.id = c.pengguna_id WHERE c.pengajuan_id = ? ORDER BY c.id DESC', [$id]) as $c) {
-		$siapa = $c['sistem'] ? 'Sistem' : ($c['peran'] === 'admin' ? 'Admin Literaindo' : $c['nama']);
+		$siapa = $c['sistem'] ? 'Sistem' : (['admin' => 'Admin Literaindo', 'keuangan' => 'Keuangan Literaindo'][$c['peran']] ?? $c['nama']);
 		$out .= '<li class="' . ($c['sistem'] ? 'riwayat--sistem' : ($c['peran'] === 'admin' ? 'riwayat--admin' : '')) . '"><span class="riwayat__siapa">' . e((string) $siapa) . ' · ' . e(tanggal($c['dibuat'])) . '</span><p>' . nl2br(e($c['isi'])) . '</p></li>';
 	}
 	return '<ul class="riwayat">' . $out . '</ul>';
@@ -290,6 +290,9 @@ function pengaju_detail(bool $post, string $id): void
 	if ($u['peran'] === 'admin') {
 		arahkan('/admin/pengajuan/' . (int) $id);
 	}
+	if ($u['peran'] !== 'pengaju') {
+		arahkan(beranda_peran($u['peran']));
+	}
 	$p = pengajuan_milik((int) $id, $u);
 	$pid = (int) $p['id'];
 
@@ -310,7 +313,8 @@ function pengaju_detail(bool $post, string $id): void
 				$nominal = $tahap === 1 ? (int) pengaturan('biaya_awal', '250000') : (int) $p['tagihan_2'];
 				q('INSERT INTO pembayaran (pengajuan_id, tahap, nominal, berkas_id, status, dibuat) VALUES (?, ?, ?, ?, ?, ?)', [$pid, $tahap, $nominal, $bid, 'menunggu', sekarang()]);
 				ubah_status($p, 'VERIFIKASI_BAYAR_' . $tahap, 'Bukti bayar ' . rupiah($nominal) . ' diunggah.');
-				pesan('Bukti bayar terkirim. Admin akan memverifikasinya.');
+				notif_keuangan('Bukti bayar ' . (TAHAP_BAYAR[$tahap] ?? '') . ' ' . rupiah($nominal) . ' dari ' . $u['nama'] . ' ("' . $p['judul'] . '") perlu diverifikasi.');
+				pesan('Bukti bayar terkirim. Bagian keuangan akan memverifikasinya.');
 			} catch (RuntimeException $ex) {
 				pesan($ex->getMessage(), 'galat');
 			}
@@ -323,7 +327,7 @@ function pengaju_detail(bool $post, string $id): void
 	$langkah = match ($p['status']) {
 		'DRAF' => '<p>Lengkapi data dan berkas, lalu kirim pengajuan.</p><p><a class="tombol" href="' . e(url("/akun/pengajuan/$pid/ubah")) . '">Lengkapi &amp; Kirim</a></p>',
 		'MENUNGGU_BAYAR_1' => pembayaran_ditolak($pid, 1) . '<div class="tagihan"><div><p>Biaya awal penerbitan</p><p class="tagihan__nominal">' . rupiah($biaya_awal) . '</p><p class="catatan">Pindai QRIS dari aplikasi bank atau dompet digital apa pun, bayar tepat sesuai nominal, lalu unggah bukti bayarnya. Biaya ini tidak dapat dikembalikan.</p>' . form_bukti(1) . '</div>' . blok_qris($biaya_awal) . '</div>',
-		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => '<p>Bukti pembayaran Anda sedang dicek admin, biasanya dalam 1×24 jam kerja.</p>',
+		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => '<p>Bukti pembayaran Anda sedang dicek bagian keuangan, biasanya dalam 1×24 jam kerja.</p>',
 		'DITINJAU' => '<p>Naskah sedang diproses redaksi: penyuntingan, tata letak, dan desain sampul. Admin akan menghubungi Anda bila ada catatan.</p>',
 		'PERLU_REVISI' => '<p>Redaksi meminta perbaikan naskah. Baca catatan di bagian Riwayat, lalu kirim naskah revisi.</p><p><a class="tombol" href="' . e(url("/akun/pengajuan/$pid/ubah")) . '">Kirim Naskah Revisi</a></p>',
 		'PROSES_ISBN' => '<p>Naskah selesai diproses dan sedang diajukan ISBN ke Perpustakaan Nasional.</p>' . ($buku ? '<p>Halaman buku Anda: <a href="' . e(url(buku_url($buku))) . '">' . e(url_absolut(buku_url($buku))) . '</a></p>' : '')
@@ -391,14 +395,17 @@ function pengaju_profil(bool $post): void
 		</fieldset>
 		<button type="submit" class="tombol">Simpan</button>
 	</form></section>';
-	tampil('Profil', $isi, ['panel' => $u['peran'] === 'admin' ? menu_admin('') : menu_pengaju('/akun/profil')]);
+	tampil('Profil', $isi, ['panel' => menu_peran($u, '/akun/profil')]);
 }
 
 function unduh_berkas(bool $post, string $id): void
 {
 	$u = wajib_masuk();
 	$b = satu('SELECT b.*, p.pengguna_id FROM berkas b JOIN pengajuan p ON p.id = b.pengajuan_id WHERE b.id = ?', [(int) $id]);
-	if (!$b || ($u['peran'] !== 'admin' && (int) $b['pengguna_id'] !== (int) $u['id'])) {
+	$boleh = $b && ($u['peran'] === 'admin'
+		|| (int) $b['pengguna_id'] === (int) $u['id']
+		|| ($u['peran'] === 'keuangan' && in_array($b['jenis'], ['bukti_1', 'bukti_2'], true)));
+	if (!$boleh) {
 		tidak_ditemukan();
 	}
 	$inline = in_array(strtolower(pathinfo($b['path'], PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp', 'pdf'], true);

@@ -13,6 +13,7 @@ require __DIR__ . '/halaman/pengaju.php';
 require __DIR__ . '/halaman/admin.php';
 require __DIR__ . '/halaman/pasang.php';
 require __DIR__ . '/halaman/notifikasi.php';
+require __DIR__ . '/halaman/keuangan.php';
 
 date_default_timezone_set('Asia/Jakarta');
 header('X-Frame-Options: SAMEORIGIN');
@@ -48,6 +49,8 @@ $rute = [
 	'#^/notifikasi$#'                       => 'halaman_notifikasi',
 	'#^/notifikasi/jumlah$#'                => 'notifikasi_jumlah',
 	'#^/notifikasi/(\d+)$#'                 => 'notifikasi_buka',
+	'#^/keuangan$#'                         => 'keuangan_transaksi',
+	'#^/keuangan/unduh$#'                   => 'keuangan_unduh',
 	'#^/admin$#'                            => 'admin_dasbor',
 	'#^/admin/pengajuan$#'                  => 'admin_pengajuan',
 	'#^/admin/pengajuan/(\d+)$#'            => 'admin_pengajuan_detail',
