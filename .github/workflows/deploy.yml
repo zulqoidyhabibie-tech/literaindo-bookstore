@@ -1,5 +1,5 @@
-# Bangun website dari folder site/ lalu simpan hasilnya di cabang "deploy".
-# Hostinger (hPanel → GIT) menarik cabang "deploy" ke public_html.
+# Periksa kode PHP di folder app/ lalu salin isinya ke cabang "deploy".
+# Hostinger (hPanel → GIT) menarik cabang "deploy" ke public_html/bookstore.
 name: Bangun website
 
 on:
@@ -22,12 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Periksa sintaks PHP
+        run: find app -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      - name: Bangun website
-        run: node site/build.mjs
+      - name: Siapkan isi website
+        run: cp -a app dist
 
       - name: Kirim hasil ke cabang deploy
         run: |

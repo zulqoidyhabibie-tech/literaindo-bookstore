@@ -1,57 +1,67 @@
 # Literaindo Press
 
-Website katalog resmi Literaindo Press: daftar buku dengan filter, halaman detail
-untuk setiap buku (link tetap untuk pengajuan ISBN), serta pemesanan melalui
-WhatsApp dan pembayaran QRIS BTN.
+Website resmi Literaindo Press (https://bookstore.literaindo.com):
 
-Website ini statis (HTML, CSS, sedikit JavaScript) tanpa database, sehingga
-ringan, aman, dan murah di hosting.
+- **Katalog publik**: daftar buku dengan filter, halaman detail tiap buku (link tetap untuk pengajuan ISBN), pemesanan via WhatsApp dan QRIS BTN.
+- **Akun penulis (pengaju)**: daftar, ajukan naskah, unggah berkas, bayar biaya awal dan pelunasan via QRIS, pantau status, terima email setiap perubahan status.
+- **Panel admin**: verifikasi pembayaran, minta revisi, tetapkan jumlah cetak dan tagihan pelunasan (sekaligus membuat halaman buku), simpan ISBN, input resi, kelola katalog, pengguna, biaya awal, dan gambar QRIS.
+
+Dibuat dengan PHP biasa (tanpa framework, tanpa WordPress) dan MySQL.
+Butuh PHP 8.1 atau lebih baru.
+
+## Alur pengajuan
+
+```
+Draf → Menunggu biaya awal (Rp250.000) → Verifikasi → Ditinjau redaksi ⇄ Perlu revisi
+     → [admin tetapkan tagihan + halaman buku dibuat] Proses ISBN
+     → [admin isi ISBN, buku jadi "Sudah Terbit"] Menunggu pelunasan → Verifikasi
+     → Lunas, antre cetak → [admin isi resi] Selesai
+```
+
+Admin bisa menolak pengajuan di tahap mana pun sebelum selesai.
 
 ## Struktur
 
 ```
-site/
-  data/situs.json   identitas penerbit, kontak, menu, warna utama
-  data/buku.json    daftar buku (satu objek per buku)
-  konten/*.html     halaman Tentang Kami, Layanan, Cara Pemesanan, dll.
-  assets/           CSS, JavaScript, logo, gambar QRIS, sampul buku
-  statis/           file yang disalin apa adanya (.htaccess)
-  build.mjs         pembuat website → folder dist/
-.github/workflows/deploy.yml   bangun otomatis ke cabang `deploy`
+app/                     isi website (disalin apa adanya ke cabang `deploy`)
+  index.php              pintu masuk + daftar rute
+  .htaccess, .user.ini   aturan server dan batas unggah (32 MB)
+  lib/                   inti (database, sesi, CSRF), tampilan, unggahan, skema tabel
+  halaman/               publik, akun, pengaju, admin, pasang (pemasangan pertama)
+  konten/*.html          halaman Tentang Kami, Layanan, Syarat & Ketentuan, dll.
+  data/situs.json        identitas penerbit, kontak, menu, warna utama
+  data/buku-awal.json    buku yang dimasukkan saat pemasangan pertama
+  assets/                CSS, JavaScript, logo, QRIS, sampul
+.github/workflows/deploy.yml   periksa PHP lalu kirim app/ ke cabang `deploy`
 ```
 
-## Menambah atau mengubah buku
+Data rahasia dan berkas unggahan **tidak** disimpan di folder website, tetapi di
+folder `literaindo-data` satu tingkat di atas `public_html`
+(`/home/uXXX/domains/literaindo.com/literaindo-data`): `config.php` dan `berkas/`.
+Folder ini tidak tersentuh saat deploy. Bisa diganti dengan variabel lingkungan
+`LITERAINDO_DATA`.
 
-1. Simpan sampul (JPG/PNG/WebP, rasio 2:3, lebar ±600 px) di `site/assets/sampul/`.
-2. Tambahkan satu entri di `site/data/buku.json`:
+## Menambah buku
 
-| Kolom | Isi |
-| --- | --- |
-| `slug` | bagian link, huruf kecil dan tanda minus. Jangan diubah setelah dikirim ke ISBN. |
-| `judul`, `subjudul` | judul buku |
-| `penulis` | daftar nama, misalnya `["Dr. A", "B, M.Pd."]` |
-| `editor`, `kategori`, `tahun`, `edisi`, `halaman`, `ukuran`, `bahasa` | data bibliografis |
-| `status` | `segera_terbit` (tampil, belum bisa dipesan) atau `terbit` |
-| `isbn`, `eisbn` | kosongkan dulu bila belum terbit |
-| `harga_cetak`, `harga_ebook` | angka tanpa titik; 0 = tidak dijual dalam format itu |
-| `sampul` | misalnya `/assets/sampul/judul-buku.jpg` |
-| `tanggal_tambah` | `YYYY-MM-DD`, untuk urutan di katalog |
-| `deskripsi` | paragraf dipisah baris kosong (`\n\n`) |
-
-3. Commit ke `main`. GitHub Actions membangun website dan memperbarui cabang `deploy`.
-
-Link buku: `https://bookstore.literaindo.com/buku/<slug>/`.
+Masuk sebagai admin → **Katalog → Tambah Buku**. Buku dari pengajuan penulis
+dibuat otomatis saat admin menetapkan tagihan pelunasan.
 
 ## Mencoba di komputer
 
 ```
-node site/build.mjs
-cd dist && python3 -m http.server 8000
+export LITERAINDO_DATA=/tmp/literaindo-data LITERAINDO_SQLITE=/tmp/literaindo-data/db.sqlite
+php -S 127.0.0.1:8000 -t app router.php
 ```
 
-Buka http://localhost:8000.
+Buka http://127.0.0.1:8000/pasang, buat akun admin, lalu coba alurnya.
 
 ## Pemasangan di Hostinger
+
+1. hPanel → **Database → Manajemen**: buat database MySQL, catat nama database, pengguna, dan kata sandinya.
+2. hPanel → **Lanjutan → Konfigurasi PHP**: pilih PHP 8.1 atau lebih baru.
+3. Deploy cabang `deploy` (lihat di bawah), lalu segera buka `https://bookstore.literaindo.com/pasang` dan isi formulirnya. Setelah itu halaman `/pasang` tertutup otomatis.
+
+Pengaturan Git:
 
 Hostinger hPanel → Websites → Kelola → Lanjutan → **GIT**:
 
