@@ -48,6 +48,10 @@
       "url": "/kebijakan-privasi/"
     },
     {
+      "label": "Info ISBN",
+      "url": "/info-isbn/"
+    },
+    {
       "label": "Perpustakaan Nasional RI",
       "url": "https://isbn.perpusnas.go.id/"
     }
