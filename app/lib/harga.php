@@ -148,3 +148,64 @@ function taksiran_cetak(array $p, int $halaman, int $gramasi): array
 	$c = $cover ? (int) $cover['harga'] : 0;
 	return ['isi' => $isi, 'cover' => $c, 'per_buku' => $isi + $c, 'lembar' => $lembar, 'harga_kertas' => $kertas ? (int) $kertas['harga'] : 0, 'catatan' => $catatan];
 }
+
+// ---------------------------------------------------------------------------
+// Paket penerbitan. Literaindo hanya menerima naskah siap terbit (tanpa editing/layout/desain).
+// [nama, eksemplar wajib, termasuk HKI, kunci pengaturan harga, harga bawaan, ringkasan]
+const PAKET = [
+	'aksara' => ['Paket Aksara', 5, false, 'harga_paket_aksara', 350000, 'ISBN + cetak 5 eksemplar'],
+	'pustaka' => ['Paket Pustaka', 10, true, 'harga_paket_pustaka', 750000, 'ISBN + cetak 10 eksemplar + sertifikat HKI'],
+];
+const SPEK_STANDAR = ['ukuran' => 'A5 (14,8 × 21 cm)', 'sisi_cetak' => '2', 'warna_isi' => 'hitam_putih', 'jenis_kertas' => 'hvs', 'jenis_sampul' => 'soft', 'jilid' => 'lem', 'laminasi' => 'doff'];
+const EKS_TIDAK_UNTUK_PENULIS = 4; // 2 Perpusnas, 1 Perpusda, 1 arsip penerbit
+
+function harga_paket(string $k): int
+{
+	return isset(PAKET[$k]) ? (int) pengaturan(PAKET[$k][3], (string) PAKET[$k][4]) : 0;
+}
+
+function margin_cetak(): int
+{
+	return (int) pengaturan('margin_cetak', '30');
+}
+
+function batas_halaman_paket(): int
+{
+	return (int) pengaturan('batas_halaman_paket', '200');
+}
+
+/** Harga cetak per buku (sudah termasuk margin) untuk buku standar setebal batas halaman paket. */
+function per_buku_standar(): int
+{
+	$gram = satu('SELECT MIN(gramasi) AS g FROM harga_kertas WHERE ukuran=? AND kertas=? AND warna=? AND sisi=?', ['A5', 'hvs', 'hitam_putih', '2']);
+	$t = taksiran_cetak(SPEK_STANDAR, batas_halaman_paket(), (int) ($gram['g'] ?? 0));
+	return (int) round($t['per_buku'] * (100 + margin_cetak()) / 100);
+}
+
+/** Data paket untuk taksiran.js dan tampilan. */
+function data_paket(): array
+{
+	$out = [];
+	foreach (PAKET as $k => [$nama, $eks, $hki, , , $ringkas]) {
+		$out[$k] = ['nama' => $nama, 'eks' => $eks, 'hki' => $hki, 'harga' => harga_paket($k), 'ringkas' => $ringkas];
+	}
+	return $out;
+}
+
+/** Kartu paket untuk halaman publik dan formulir. $nama_input kosong = hanya tampilan. */
+function kartu_paket(string $nama_input = '', string $terpilih = ''): string
+{
+	$batas = batas_halaman_paket();
+	$out = '<div class="paket-grid">';
+	foreach (data_paket() as $k => $p) {
+		$isi = '<span class="paket__nama">' . e($p['nama']) . '</span><span class="paket__harga">' . rupiah($p['harga']) . '</span>'
+			. '<ul class="paket__isi"><li>ISBN dari Perpustakaan Nasional RI</li><li>Cetak ' . $p['eks'] . ' eksemplar (' . ($p['eks'] - EKS_TIDAK_UNTUK_PENULIS) . ' untuk penulis, ' . EKS_TIDAK_UNTUK_PENULIS . ' untuk wajib serah dan arsip)</li>'
+			. ($p['hki'] ? '<li>Sertifikat HKI (hak cipta)</li>' : '')
+			. '<li>Halaman buku di katalog Literaindo Press</li></ul>'
+			. '<span class="paket__catatan">Untuk buku A5 hingga ' . $batas . ' halaman, HVS hitam putih, soft cover. Halaman lebih banyak atau spesifikasi lain menyesuaikan daftar harga cetak. Belum termasuk ongkos kirim.</span>';
+		$out .= $nama_input
+			? '<label class="paket"><input type="radio" name="' . e($nama_input) . '" value="' . $k . '" data-eks="' . $p['eks'] . '"' . ($k === $terpilih ? ' checked' : '') . '>' . $isi . '</label>'
+			: '<div class="paket">' . $isi . '</div>';
+	}
+	return $out . '</div>';
+}

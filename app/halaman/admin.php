@@ -108,8 +108,10 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			} elseif ($aksi === 'tagihan' && in_array($s, ['DITINJAU', 'PROSES_ISBN', 'MENUNGGU_BAYAR_2'], true)) {
 				$jumlah = (int) input('jumlah_cetak');
 				$tagihan = (int) preg_replace('/\D/', '', input('tagihan_2'));
-				if ($jumlah < CETAK_MIN || $tagihan < 1) {
-					throw new RuntimeException('Isi nominal pelunasan dan jumlah cetak (minimal ' . CETAK_MIN . ' eksemplar).');
+				$paket = isset(PAKET[input('paket')]) ? input('paket') : '';
+				$min = $paket ? PAKET[$paket][1] : CETAK_MIN;
+				if ($jumlah < $min || $tagihan < 1) {
+					throw new RuntimeException('Isi nominal pelunasan dan jumlah cetak (minimal ' . $min . ' eksemplar).');
 				}
 				$spek = [];
 				foreach (PILIHAN_CETAK as $k => [, $opsi]) {
@@ -118,6 +120,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				$per_buku = (int) preg_replace('/\D/', '', input('harga_per_buku'));
 				$sebelum = ringkas_cetak($p);
 				$kolom = array_keys($spek);
+				q('UPDATE pengajuan SET paket = ? WHERE id = ?', [$paket, $pid]);
 				q('UPDATE pengajuan SET jumlah_cetak = ?, halaman_final = ?, halaman_cetak = ?, gramasi = ?, harga_per_buku = ?, tagihan_2 = ?, rincian_tagihan_2 = ?, ' . implode(' = ?, ', $kolom) . ' = ?, diubah = ? WHERE id = ?',
 					[$jumlah, input('halaman_final'), max(0, (int) input('halaman_cetak')), (int) input('gramasi'), $per_buku, $tagihan, input('rincian_tagihan_2'), ...array_values($spek), ...[sekarang(), $pid]]);
 				$sesudah = ringkas_cetak($spek);
@@ -186,9 +189,20 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		$halaman = (int) ($p['halaman_cetak'] ?: hitung_halaman((string) $p['halaman_final']) ?: $p['perkiraan_halaman']);
 		$t = taksiran_cetak($nilai_spek + $p, $halaman, $gram_pilih);
 		$jumlah = (int) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta']);
-		$per_buku = (int) ($p['harga_per_buku'] ?: $t['per_buku']);
+		$margin = margin_cetak();
+		$per_buku = (int) ($p['harga_per_buku'] ?: round($t['per_buku'] * (100 + $margin) / 10000) * 100);
 		$data = data_harga();
 		$data['biaya_awal'] = $biaya_awal;
+		$data['paket'] = data_paket();
+		$data['margin'] = $margin;
+		$data['per_buku_std'] = per_buku_standar();
+		$paket = isset(PAKET[$p['paket'] ?? '']) ? $p['paket'] : '';
+		$opsi_paket = '';
+		foreach ($data['paket'] as $k => $pk) {
+			$opsi_paket .= '<option value="' . $k . '"' . ($k === $paket ? ' selected' : '') . '>' . e($pk['nama'] . ' · ' . rupiah($pk['harga']) . ' · ' . $pk['eks'] . ' eks') . '</option>';
+		}
+		$opsi_paket .= '<option value=""' . ($paket === '' ? ' selected' : '') . '>Tanpa paket (hitung per buku)</option>';
+		$min = $paket ? PAKET[$paket][1] : CETAK_MIN;
 
 		$isi = '<div data-taksiran>
 		<h4 class="subjudul-form">1. Spesifikasi cetak</h4><p class="catatan">Sesuai pilihan penulis: <strong>' . e(ringkas_cetak($p)) . '</strong>. Ubah bila disepakati lain dengan penulis.</p>
@@ -204,22 +218,40 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			<tr><th>Cover &amp; jilid</th><td data-t="rumus-cover">' . e(label_cetak('jenis_sampul', $nilai_spek['jenis_sampul']) . ', ' . label_cetak('jilid', $nilai_spek['jilid']) . ', ' . label_cetak('laminasi', $nilai_spek['laminasi'])) . '</td><td data-t="cover">' . rupiah($t['cover']) . '</td></tr>
 			<tr class="taksiran__total"><th colspan="2">Taksiran harga cetak per buku</th><td data-t="per_buku">' . rupiah($t['per_buku']) . '</td></tr>
 		</table>
+		<table class="taksiran taksiran--berat">
+			<tr><th>Berat per buku</th><td>kertas isi + cover</td><td data-b="buku">-</td></tr>
+			<tr><th>Total cetak</th><td data-b="n-total">-</td><td data-b="total">-</td></tr>
+			<tr><th>Kiriman ke penulis</th><td data-b="n-penulis">-</td><td data-b="penulis">-</td></tr>
+			<tr><th>Wajib serah ke Perpusnas</th><td>2 eks + kemasan</td><td data-b="perpusnas">-</td></tr>
+			<tr><th>Wajib serah ke Perpusda</th><td>1 eks + kemasan</td><td data-b="perpusda">-</td></tr>
+		</table>
+		<p class="catatan">Berat adalah taksiran untuk ongkir: kertas (luas × gramasi), cover, dan kemasan ±100 g per kiriman. Kurir membulatkan ke atas per kg. Buku arsip penerbit tidak dikirim.</p>
 		<p class="pesan pesan--info taksiran__catatan" data-t="catatan"' . ($t['catatan'] ? '' : ' hidden') . '>' . e(implode(' ', $t['catatan'])) . ' Isi harga per buku secara manual atau lengkapi <a href="' . e(url('/admin/harga')) . '">daftar harga</a>.</p>
 
-		<h4 class="subjudul-form">3. Harga dan tagihan pelunasan</h4>
+		<h4 class="subjudul-form">3. Paket, harga, dan tagihan pelunasan</h4>
 		<div class="kolom-2">
-			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. ' . CETAK_MIN . ')</span></label><input type="number" min="' . CETAK_MIN . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . $jumlah . '" data-jumlah></div>
-			<div><label for="harga_per_buku">Harga cetak per buku (Rp)</label><input id="harga_per_buku" name="harga_per_buku" inputmode="numeric" value="' . ($per_buku ?: '') . '" data-per-buku' . ($p['harga_per_buku'] ? ' data-manual="1"' : '') . '><button type="button" class="tautan-tombol" data-pakai-taksiran>Pakai taksiran</button></div>
+			<div><label for="paket">Paket penerbitan</label><select id="paket" name="paket" data-paket>' . $opsi_paket . '</select></div>
+			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. <span data-min-eks>' . $min . '</span>)</span></label><input type="number" min="' . $min . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . $jumlah . '" data-jumlah></div>
+			<div><label for="harga_per_buku">Harga cetak per buku (Rp) <span class="catatan">(taksiran + margin ' . $margin . '%)</span></label><input id="harga_per_buku" name="harga_per_buku" inputmode="numeric" value="' . ($per_buku ?: '') . '" data-per-buku' . ($p['harga_per_buku'] ? ' data-manual="1"' : '') . '><button type="button" class="tautan-tombol" data-pakai-taksiran>Pakai taksiran</button></div>
 			<div><label for="tagihan_2">Nominal pelunasan (Rp)</label><input id="tagihan_2" name="tagihan_2" inputmode="numeric" required value="' . e($p['tagihan_2'] ?: '') . '" data-tagihan' . ($p['tagihan_2'] ? ' data-manual="1"' : '') . '>
-				<label class="centang"><input type="checkbox" data-potong> Kurangi biaya awal ' . rupiah($biaya_awal) . '</label></div>
+				<label class="centang" data-hanya-tanpa-paket><input type="checkbox" data-potong> Kurangi biaya awal ' . rupiah($biaya_awal) . '</label></div>
 			<div><label for="rincian_tagihan_2">Rincian untuk penulis</label><input id="rincian_tagihan_2" name="rincian_tagihan_2" placeholder="mis. 5 eks × Rp45.000" value="' . e($p['rincian_tagihan_2']) . '" data-rincian' . ($p['rincian_tagihan_2'] ? ' data-manual="1"' : '') . '></div>
 			<div><label for="harga_cetak">Harga jual di katalog (Rp' . ($buat_buku ? ', opsional' : '') . ')</label><input id="harga_cetak" name="harga_cetak" inputmode="numeric" value="' . e((string) (($buku['harga_cetak'] ?? 0) ?: '')) . '"></div>';
 		if ($buat_buku) {
 			$isi .= '<div><label for="slug">Link halaman buku</label><input id="slug" name="slug" value="' . e(slugify($p['judul'])) . '" pattern="[a-z0-9-]+"><span class="catatan">bookstore.literaindo.com/buku/<em>link</em>/ — tidak boleh diubah setelah dikirim ke Perpusnas</span></div>';
 		}
-		$isi .= '</div><p class="catatan">Nominal pelunasan dan rinciannya terisi otomatis dari harga per buku × jumlah eksemplar. Periksa, ubah bila perlu, lalu simpan untuk mengesahkan.</p></div>
+		$isi .= '</div>
+		<table class="taksiran taksiran--paket" data-rincian-paket>
+			<tr><th data-p="nama">Harga paket</th><td></td><td data-p="harga">-</td></tr>
+			<tr><th>Selisih spesifikasi</th><td data-p="ket-selisih">-</td><td data-p="selisih">-</td></tr>
+			<tr><th>Eksemplar tambahan</th><td data-p="ket-tambah">-</td><td data-p="tambah">-</td></tr>
+			<tr><th>Total</th><td></td><td data-p="total">-</td></tr>
+			<tr><th>Uang muka (biaya awal)</th><td>sudah dibayar</td><td data-p="dp">-</td></tr>
+			<tr class="taksiran__total"><th colspan="2">Pelunasan</th><td data-p="pelunasan">-</td></tr>
+		</table>
+		<p class="catatan">Selisih spesifikasi muncul bila harga cetak per buku lebih mahal dari buku standar paket (A5, ' . batas_halaman_paket() . ' halaman, HVS hitam putih, soft cover) yaitu ' . rupiah($data['per_buku_std']) . ' per buku. Nominal pelunasan dan rinciannya terisi otomatis. Periksa, ubah bila perlu, lalu simpan untuk mengesahkan.</p></div>
 		<script type="application/json" id="data-harga">' . json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>
-		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=1" defer></script>';
+		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=5" defer></script>';
 		return $form('tagihan', $isi, $buat_buku ? 'Tetapkan Tagihan &amp; Buat Halaman Buku' : 'Perbarui Tagihan');
 	};
 	$catatan_input = fn (string $label, string $id) => '<label for="' . $id . '">' . $label . '</label><textarea id="' . $id . '" name="catatan" rows="3"></textarea>';
@@ -298,6 +330,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
 			<div><dt>Jenis karya</dt><dd>' . e($jk[0]) . '</dd></div>
+			<div><dt>Paket</dt><dd>' . e(PAKET[$p['paket']][0] ?? '-') . '</dd></div>
 			' . data_cetak($p) . '
 			<div><dt>Perkiraan halaman</dt><dd>' . e((string) $p['perkiraan_halaman']) . '</dd></div>
 			<div><dt>Cetak diminta</dt><dd>' . e((string) $p['jumlah_cetak_diminta']) . ' eksemplar</dd></div>
@@ -482,6 +515,14 @@ function admin_pengaturan(bool $post): void
 				throw new RuntimeException('Isi biaya awal.');
 			}
 			simpan_pengaturan('biaya_awal', (string) $biaya);
+			foreach (PAKET as [, , , $kunci]) {
+				$h = (int) preg_replace('/\D/', '', input($kunci));
+				if ($h > 0) {
+					simpan_pengaturan($kunci, (string) $h);
+				}
+			}
+			simpan_pengaturan('batas_halaman_paket', (string) max(1, (int) input('batas_halaman_paket', '200')));
+			simpan_pengaturan('margin_cetak', (string) max(0, min(500, (int) input('margin_cetak', '30'))));
 			$qris = unggah_sampul_katalog('qris');
 			if ($qris !== '') {
 				simpan_pengaturan('qris_gambar', $qris);
@@ -496,6 +537,15 @@ function admin_pengaturan(bool $post): void
 	<form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '
 		<label for="biaya_awal">Biaya awal pengajuan (Rp)</label>
 		<input id="biaya_awal" name="biaya_awal" inputmode="numeric" value="' . e(pengaturan('biaya_awal', '250000')) . '">
+		<p class="catatan">Biaya awal menjadi uang muka dan dipotong dari harga paket saat pelunasan.</p>
+		<fieldset><legend>Paket penerbitan</legend>
+			' . implode('', array_map(fn ($pk) => '<label for="' . $pk[3] . '">Harga ' . e($pk[0]) . ' (Rp) <span class="catatan">' . e($pk[5]) . '</span></label><input id="' . $pk[3] . '" name="' . $pk[3] . '" inputmode="numeric" value="' . e(pengaturan($pk[3], (string) $pk[4])) . '">', PAKET)) . '
+			<label for="batas_halaman_paket">Batas halaman buku standar paket</label>
+			<input id="batas_halaman_paket" name="batas_halaman_paket" type="number" min="1" value="' . e((string) batas_halaman_paket()) . '">
+			<label for="margin_cetak">Margin harga cetak per buku (%)</label>
+			<input id="margin_cetak" name="margin_cetak" type="number" min="0" max="500" value="' . e((string) margin_cetak()) . '">
+			<p class="catatan">Harga paket berlaku untuk buku A5, HVS hitam putih, soft cover, sampai batas halaman di atas. Buku yang lebih tebal atau spesifikasinya lain dikenai selisih biaya cetak. Harga cetak per buku = taksiran dari Harga Cetak + margin.</p>
+		</fieldset>
 		<label for="qris">Gambar QRIS (unggah untuk mengganti)</label>
 		' . blok_qris() . '
 		<input type="file" id="qris" name="qris" accept=".jpg,.jpeg,.png,.webp">

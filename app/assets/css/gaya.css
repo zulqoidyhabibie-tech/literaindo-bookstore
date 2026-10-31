@@ -1849,3 +1849,95 @@ ul.pesan {
 	cursor: pointer;
 	justify-self: start;
 }
+
+/* Paket penerbitan */
+.paket-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 0.9rem;
+	margin: 0.8rem 0;
+}
+
+.paket,
+.formulir label.paket {
+	position: relative;
+	display: grid;
+	align-content: start;
+	gap: 0.4rem;
+	margin: 0;
+	padding: 1rem 1.1rem;
+	border: 2px solid var(--garis);
+	border-radius: 10px;
+	background: #fff;
+	font-weight: 400;
+}
+
+.formulir label.paket {
+	cursor: pointer;
+}
+
+.paket input {
+	position: absolute;
+	top: 1rem;
+	right: 1rem;
+	width: 1.2rem;
+	height: 1.2rem;
+	margin: 0;
+	accent-color: var(--warna-utama);
+}
+
+.paket:has(input:checked) {
+	border-color: var(--warna-utama);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--warna-utama) 18%, transparent);
+}
+
+.paket:has(input:focus-visible) {
+	outline: 3px solid var(--aksen);
+	outline-offset: 2px;
+}
+
+.paket__nama {
+	font-weight: 700;
+	font-size: 1.1rem;
+	color: var(--tinta);
+}
+
+.paket__harga {
+	font-weight: 800;
+	font-size: 1.5rem;
+	color: var(--warna-utama);
+}
+
+.paket__isi {
+	margin: 0.2rem 0;
+	padding-left: 1.1rem;
+	font-size: 0.92rem;
+}
+
+.paket__isi li {
+	margin: 0.15rem 0;
+}
+
+.paket__catatan {
+	color: var(--redup);
+	font-size: 0.82rem;
+	line-height: 1.45;
+}
+
+.formulir label.siap-terbit {
+	margin-top: 1rem;
+	padding: 0.8rem 1rem 0.8rem 2.6rem;
+	border-left: 4px solid var(--aksen);
+	border-radius: var(--sudut);
+	background: #fdf7e6;
+}
+
+.formulir label.siap-terbit input {
+	left: 0.9rem;
+	top: 1rem;
+}
+
+.taksiran[hidden],
+.formulir label.centang[hidden] {
+	display: none;
+}
