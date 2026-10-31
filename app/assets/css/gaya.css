@@ -749,7 +749,7 @@ main {
 	display: none;
 }
 
-.kotak-status-grid--uang {
+.kotak-status-grid.kotak-status-grid--uang {
 	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 }
 
