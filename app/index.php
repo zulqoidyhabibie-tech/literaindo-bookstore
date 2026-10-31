@@ -14,6 +14,7 @@ require __DIR__ . '/halaman/pengaju.php';
 require __DIR__ . '/halaman/admin.php';
 require __DIR__ . '/halaman/pasang.php';
 require __DIR__ . '/halaman/notifikasi.php';
+require __DIR__ . '/halaman/pesanan.php';
 require __DIR__ . '/halaman/keuangan.php';
 
 date_default_timezone_set('Asia/Jakarta');
@@ -43,6 +44,14 @@ $rute = [
 	'#^/keluar$#'                           => 'halaman_keluar',
 	'#^/akun$#'                             => 'pengaju_daftar',
 	'#^/akun/profil$#'                      => 'pengaju_profil',
+	'#^/akun/pesanan$#'                     => 'pesanan_saya',
+	'#^/pesan/([a-z0-9-]+)$#'               => 'halaman_pesan_buku',
+	'#^/pesanan$#'                          => 'halaman_cek_pesanan',
+	'#^/pesanan/([A-Z0-9-]+)$#'             => 'halaman_pesanan',
+	'#^/pesanan/([A-Z0-9-]+)/bukti$#'       => 'unduh_bukti_pesanan',
+	'#^/pesanan/([A-Z0-9-]+)/ebook$#'       => 'unduh_ebook_pesanan',
+	'#^/admin/pesanan$#'                    => 'admin_pesanan',
+	'#^/admin/pesanan/(\d+)$#'              => 'admin_pesanan_detail',
 	'#^/akun/pengajuan/baru$#'              => 'pengaju_baru',
 	'#^/akun/pengajuan/(\d+)$#'             => 'pengaju_detail',
 	'#^/akun/pengajuan/(\d+)/ubah$#'        => 'pengaju_ubah',
