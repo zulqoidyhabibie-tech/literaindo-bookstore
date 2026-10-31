@@ -813,6 +813,7 @@ main {
 }
 
 .data-ringkas + h2,
+.data-ringkas + h3,
 .daftar-berkas + h2 {
 	margin-top: 1.5rem;
 }
@@ -1340,9 +1341,13 @@ ul.pesan {
 
 .data-ringkas {
 	display: grid;
-	grid-template-columns: max-content minmax(0, 1fr);
-	gap: 0.35rem 1rem;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.6rem 1.25rem;
 	margin: 0;
+}
+
+.data-ringkas > div {
+	min-width: 0;
 }
 
 .data-ringkas dt {
@@ -1351,7 +1356,7 @@ ul.pesan {
 
 .data-ringkas dd {
 	margin: 0;
-	overflow-wrap: anywhere;
+	overflow-wrap: break-word;
 }
 
 /* Admin */
