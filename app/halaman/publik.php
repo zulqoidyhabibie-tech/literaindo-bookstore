@@ -193,6 +193,7 @@ function halaman_konten(bool $post, string $slug): void
 		'wa_link' => e(wa_link()),
 		'qris' => blok_qris(),
 		'biaya_awal' => rupiah(pengaturan('biaya_awal', '250000')),
+		'paket' => kartu_paket(),
 		'url_daftar' => e(url('/daftar')),
 		'url_akun' => e(url('/akun')),
 	];

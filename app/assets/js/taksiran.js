@@ -11,7 +11,9 @@
 	var angka = function (el) { return parseInt(String(el.value).replace(/\D/g, ''), 10) || 0; };
 	var gram = $('[data-gramasi]'), hal = $('[data-halaman]'), halFinal = $('[data-halaman-final]');
 	var perBuku = $('[data-per-buku]'), jumlah = $('[data-jumlah]'), tagihan = $('[data-tagihan]'), rincian = $('[data-rincian]'), potong = $('[data-potong]');
-	var taksir = 0;
+	var paketSel = $('[data-paket]');
+	var taksir = 0, jual = 0;
+	var ratus = function (n) { return Math.round(n / 100) * 100; };
 
 	function hitungHalaman(teks) {
 		var nilai = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 }, total = 0;
@@ -55,7 +57,8 @@
 		var cat = akar.querySelector('[data-t="catatan"]');
 		cat.hidden = !catatan.length;
 		if (catatan.length) cat.firstChild.textContent = catatan.join(' ') + ' Isi harga per buku secara manual atau lengkapi ';
-		otomatis(perBuku, taksir || '');
+		jual = ratus(taksir * (100 + (D.margin || 0)) / 100);
+		otomatis(perBuku, jual || '');
 		hitungTagihan();
 		hitungBerat(uk, n, k ? k.gramasi : (parseInt(gram.value, 10) || 0));
 	}
@@ -80,12 +83,34 @@
 		tulis('perpusda', halaman ? bulat(buku + KEMASAN) : '-');
 	}
 
+	function tulisP(k, v) { var el = akar.querySelector('[data-p="' + k + '"]'); if (el) el.textContent = v; }
+
 	function hitungTagihan() {
 		var pb = angka(perBuku), eks = angka(jumlah);
+		var pk = paketSel && D.paket ? D.paket[paketSel.value] : null;
+		var tabel = akar.querySelector('[data-rincian-paket]'), cek = akar.querySelector('[data-hanya-tanpa-paket]');
+		if (tabel) tabel.hidden = !pk;
+		if (cek) cek.hidden = !!pk;
+		if (pk) {
+			jumlah.min = pk.eks;
+			akar.querySelectorAll('[data-min-eks]').forEach(function (el) { el.textContent = pk.eks; });
+			var selisih = Math.max(0, pb - D.per_buku_std) * pk.eks;
+			var tambahEks = Math.max(0, eks - pk.eks), tambah = tambahEks * pb;
+			var total = pk.harga + selisih + tambah, sisa = Math.max(0, total - D.biaya_awal);
+			tulisP('nama', pk.nama); tulisP('harga', rp(pk.harga));
+			tulisP('ket-selisih', selisih ? pk.eks + ' eks × ' + rp(pb - D.per_buku_std) : 'spesifikasi standar'); tulisP('selisih', rp(selisih));
+			tulisP('ket-tambah', tambahEks ? tambahEks + ' eks × ' + rp(pb) : 'tidak ada'); tulisP('tambah', rp(tambah));
+			tulisP('total', rp(total)); tulisP('dp', '− ' + rp(D.biaya_awal)); tulisP('pelunasan', rp(sisa));
+			otomatis(tagihan, sisa);
+			otomatis(rincian, pk.nama + ' ' + rp(pk.harga) + (selisih ? ' + selisih spesifikasi ' + rp(selisih) : '') + (tambah ? ' + ' + tambahEks + ' eks tambahan × ' + rp(pb) : '') + ' − uang muka ' + rp(D.biaya_awal) + ' = ' + rp(sisa));
+			return;
+		}
+		akar.querySelectorAll('[data-min-eks]').forEach(function (el) { el.textContent = 5; });
+		jumlah.min = 5;
 		if (!pb || !eks) return;
-		var total = pb * eks, kurang = potong && potong.checked ? D.biaya_awal : 0;
-		otomatis(tagihan, Math.max(0, total - kurang));
-		otomatis(rincian, eks + ' eks × ' + rp(pb) + ' = ' + rp(total) + (kurang ? ' − biaya awal ' + rp(kurang) : ''));
+		var total2 = pb * eks, kurang = potong && potong.checked ? D.biaya_awal : 0;
+		otomatis(tagihan, Math.max(0, total2 - kurang));
+		otomatis(rincian, eks + ' eks × ' + rp(pb) + ' = ' + rp(total2) + (kurang ? ' − biaya awal ' + rp(kurang) : ''));
 	}
 
 	// Kolom yang diketik sendiri tidak ditimpa lagi oleh hitungan otomatis.
@@ -96,10 +121,11 @@
 	gram.addEventListener('change', hitung);
 	perBuku.addEventListener('input', hitungTagihan);
 	jumlah.addEventListener('input', hitung);
+	if (paketSel) paketSel.addEventListener('change', function () { delete tagihan.dataset.manual; delete rincian.dataset.manual; hitung(); });
 	if (potong) potong.addEventListener('change', function () { delete tagihan.dataset.manual; delete rincian.dataset.manual; hitungTagihan(); });
 	akar.querySelector('[data-pakai-taksiran]').addEventListener('click', function () {
 		delete perBuku.dataset.manual; delete tagihan.dataset.manual; delete rincian.dataset.manual;
-		perBuku.value = taksir || ''; hitungTagihan();
+		perBuku.value = jual || ''; hitungTagihan();
 	});
 	hitung();
 })();

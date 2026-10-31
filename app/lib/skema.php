@@ -22,7 +22,7 @@ function skema_notifikasi(string $driver): string
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 6) {
+	if ($versi >= 7) {
 		return;
 	}
 	if ($versi < 2) {
@@ -45,7 +45,7 @@ function pastikan_skema(): void
 		'sisi_cetak' => "VARCHAR(20) NOT NULL DEFAULT ''", 'warna_isi' => "VARCHAR(20) NOT NULL DEFAULT ''",
 		'jenis_kertas' => "VARCHAR(20) NOT NULL DEFAULT ''", 'jenis_sampul' => "VARCHAR(20) NOT NULL DEFAULT ''",
 		'jilid' => "VARCHAR(20) NOT NULL DEFAULT ''", 'laminasi' => "VARCHAR(20) NOT NULL DEFAULT ''",
-		'gramasi' => 'INT NOT NULL DEFAULT 0', 'halaman_cetak' => 'INT NOT NULL DEFAULT 0', 'harga_per_buku' => 'INT NOT NULL DEFAULT 0',
+		'paket' => "VARCHAR(20) NOT NULL DEFAULT ''", 'gramasi' => 'INT NOT NULL DEFAULT 0', 'halaman_cetak' => 'INT NOT NULL DEFAULT 0', 'harga_per_buku' => 'INT NOT NULL DEFAULT 0',
 	];
 	foreach ($kolom_baru as $kolom => $tipe) {
 		try {
@@ -58,7 +58,7 @@ function pastikan_skema(): void
 		db()->exec($sql);
 	}
 	isi_harga_awal();
-	simpan_pengaturan('versi_skema', '6');
+	simpan_pengaturan('versi_skema', '7');
 }
 
 function skema(string $driver): array
@@ -119,6 +119,7 @@ function skema(string $driver): array
 			jenis_kertas VARCHAR(20) NOT NULL DEFAULT '',
 			jenis_sampul VARCHAR(20) NOT NULL DEFAULT '',
 			jilid VARCHAR(20) NOT NULL DEFAULT '',
+			paket VARCHAR(20) NOT NULL DEFAULT '',
 			gramasi INT NOT NULL DEFAULT 0,
 			halaman_cetak INT NOT NULL DEFAULT 0,
 			harga_per_buku INT NOT NULL DEFAULT 0,
