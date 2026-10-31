@@ -22,6 +22,17 @@ const IKON = [
 	'wa'        => '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9 9c0 3 3 6 6 6l1-1.5-2-1-1 1c-1-.5-2-1.5-2.5-2.5l1-1-1-2z"/>',
 	'akun'      => '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
 	'lonceng'   => '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+	'dasbor'    => '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+	'naskah'    => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+	'buku'      => '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+	'keranjang' => '<circle cx="9" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21 7H6"/>',
+	'uang'      => '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+	'harga'     => '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/>',
+	'orang'     => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+	'atur'      => '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+	'keluar'    => '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+	'tambah'    => '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+	'lainnya'   => '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
 	'unduh'     => '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
 ];
 
@@ -72,7 +83,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=13';
+	$css = url('/assets/css/gaya.css') . '?v=14';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -113,7 +124,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	</nav>
 </header>
 <main id="isi" class="wadah">
-' . $panel . $pesan . $isi . '
+' . ($panel !== '' ? '<div class="tata-panel">' . $panel . '<div class="tata-panel__isi">' . $pesan . $isi . '</div></div>' : $pesan . $isi) . '
 </main>
 <footer class="kaki">
 	<div class="wadah kaki__kolom">
@@ -129,30 +140,94 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 ';
 }
 
-/** Menu tab untuk panel pengaju/admin. */
-function menu_panel(array $item, string $aktif): string
+/** Hitung angka tugas untuk lencana menu; gagal diam-diam agar menu tetap tampil. */
+function hitung_tugas(string $sql, array $param = []): int
 {
-	$out = '<nav class="panel-menu" aria-label="Menu panel"><ul>';
-	foreach ($item as $path => $label) {
-		$out .= '<li><a href="' . e(url($path)) . '"' . ($path === $aktif ? ' aria-current="page"' : '') . '>' . e($label) . '</a></li>';
+	try {
+		return (int) (satu($sql, $param)['n'] ?? 0);
+	} catch (Throwable) {
+		return 0;
 	}
-	$out .= '<li class="panel-menu__keluar"><form method="post" action="' . e(url('/keluar')) . '">' . csrf_field() . '<button type="submit" class="tautan">Keluar</button></form></li>';
-	return $out . '</ul></nav>';
+}
+
+/**
+ * Menu panel: sidebar kiri di layar lebar, menu bawah ala aplikasi di HP.
+ * $grup: ['Judul grup' => [[path, label, ikon, angka], ...]] (judul '' = tanpa judul).
+ * $utama: path yang tampil di menu bawah HP (maks. 4); sisanya di "Lainnya".
+ */
+function menu_panel(array $grup, array $utama, string $aktif): string
+{
+	$lencana = fn (int $n) => $n > 0 ? '<span class="menu-angka" aria-label="' . $n . ' perlu tindakan">' . ($n > 99 ? '99+' : $n) . '</span>' : '';
+	$tautan = function (array $i, string $kelas) use ($aktif, $lencana) {
+		[$path, $label, $ik, $n] = $i + [3 => 0];
+		return '<a class="' . $kelas . '" href="' . e(url($path)) . '"' . ($path === $aktif ? ' aria-current="page"' : '') . '>' . ikon($ik) . '<span>' . e($label) . '</span>' . $lencana((int) $n) . '</a>';
+	};
+	$keluar = '<form method="post" action="' . e(url('/keluar')) . '">' . csrf_field() . '<button type="submit" class="menu-item menu-item--keluar">' . ikon('keluar') . '<span>Keluar</span></button></form>';
+
+	$daftar = '';
+	$semua = [];
+	foreach ($grup as $judul => $item) {
+		$daftar .= ($judul !== '' ? '<p class="menu-grup">' . e($judul) . '</p>' : '');
+		foreach ($item as $i) {
+			$daftar .= $tautan($i, 'menu-item');
+			$semua[$i[0]] = $i;
+		}
+	}
+	$daftar .= '<hr class="menu-garis">' . $keluar;
+
+	$bawah = '';
+	$sisa_aktif = $aktif !== '' && isset($semua[$aktif]) && !in_array($aktif, $utama, true);
+	$sisa_angka = 0;
+	foreach ($semua as $path => $i) {
+		if (in_array($path, $utama, true)) {
+			$bawah .= $tautan($i, 'menu-bawah__item');
+		} else {
+			$sisa_angka += (int) ($i[3] ?? 0);
+		}
+	}
+	$bawah .= '<details class="menu-bawah__lainnya"><summary class="menu-bawah__item"' . ($sisa_aktif ? ' aria-current="page"' : '') . '>' . ikon('lainnya') . '<span>Lainnya</span>' . $lencana($sisa_angka) . '</summary>'
+		. '<div class="menu-lembar" role="menu">' . $daftar . '</div></details>';
+
+	return '<nav class="menu-samping" aria-label="Menu panel">' . $daftar . '</nav>'
+		. '<nav class="menu-bawah" aria-label="Menu panel (HP)">' . $bawah . '</nav>';
 }
 
 function menu_pengaju(string $aktif): string
 {
-	return menu_panel(['/akun' => 'Pengajuan Saya', '/akun/pengajuan/baru' => 'Ajukan Buku Baru', '/akun/pesanan' => 'Pesanan Buku', '/akun/profil' => 'Profil'], $aktif);
+	$uid = (int) (pengguna()['id'] ?? 0);
+	$giliran = "'" . implode("','", array_keys(array_filter(STATUS, fn ($s) => $s[2] === 'pengaju'))) . "'";
+	$naskah = hitung_tugas("SELECT COUNT(*) AS n FROM pengajuan WHERE pengguna_id = ? AND status IN ($giliran) AND status <> 'DRAF'", [$uid]);
+	$pesanan = hitung_tugas("SELECT COUNT(*) AS n FROM pesanan WHERE pengguna_id = ? AND status = 'MENUNGGU_BAYAR'", [$uid]);
+	return menu_panel([
+		'' => [['/akun', 'Pengajuan Saya', 'naskah', $naskah], ['/akun/pengajuan/baru', 'Ajukan Buku', 'tambah'], ['/akun/pesanan', 'Pesanan Buku', 'keranjang', $pesanan], ['/akun/profil', 'Profil', 'akun']],
+	], ['/akun', '/akun/pengajuan/baru', '/akun/pesanan', '/akun/profil'], $aktif);
 }
 
 function menu_admin(string $aktif): string
 {
-	return menu_panel(['/admin' => 'Dasbor', '/admin/pengajuan' => 'Pengajuan', '/admin/buku' => 'Katalog', '/admin/pesanan' => 'Pesanan', '/admin/harga' => 'Harga Cetak', '/keuangan' => 'Keuangan', '/admin/pengguna' => 'Pengguna', '/admin/pengaturan' => 'Pengaturan'], $aktif);
+	$naskah = hitung_tugas("SELECT COUNT(*) AS n FROM pengajuan WHERE status IN ('DITINJAU','PROSES_ISBN','LUNAS')");
+	$pesanan = hitung_tugas("SELECT COUNT(*) AS n FROM pesanan WHERE status IN ('MENUNGGU_ONGKIR','DIPROSES')");
+	$bayar = jumlah_verifikasi();
+	return menu_panel([
+		'' => [['/admin', 'Dasbor', 'dasbor']],
+		'Naskah' => [['/admin/pengajuan', 'Pengajuan', 'naskah', $naskah], ['/admin/buku', 'Katalog', 'buku']],
+		'Penjualan' => [['/admin/pesanan', 'Pesanan', 'keranjang', $pesanan], ['/keuangan', 'Keuangan', 'uang', $bayar], ['/admin/harga', 'Harga Cetak', 'harga']],
+		'Pengaturan' => [['/admin/pengguna', 'Pengguna', 'orang'], ['/admin/pengaturan', 'Pengaturan', 'atur']],
+	], ['/admin', '/admin/pengajuan', '/admin/pesanan', '/keuangan'], $aktif);
 }
 
 function menu_keuangan(string $aktif): string
 {
-	return menu_panel(['/keuangan' => 'Transaksi', '/akun/profil' => 'Profil'], $aktif);
+	return menu_panel([
+		'' => [['/keuangan', 'Transaksi', 'uang', jumlah_verifikasi()], ['/akun/profil', 'Profil', 'akun']],
+	], ['/keuangan', '/akun/profil'], $aktif);
+}
+
+/** Bukti bayar (pengajuan + pesanan) yang menunggu diperiksa keuangan. */
+function jumlah_verifikasi(): int
+{
+	return hitung_tugas("SELECT COUNT(*) AS n FROM pembayaran WHERE status = 'menunggu'")
+		+ hitung_tugas("SELECT COUNT(*) AS n FROM pesanan WHERE status = 'VERIFIKASI_BAYAR'");
 }
 
 /** Blok QRIS dengan nominal yang harus dibayar. */
