@@ -14,7 +14,6 @@ const TAHAP_TAMPIL = [
 	['Cetak & kirim', ['LUNAS', 'SELESAI']],
 ];
 
-const UKURAN_BUKU = ['A5 (14,8 × 21 cm)', 'B5 (17,6 × 25 cm)', '15,5 × 23 cm', 'A4 (21 × 29,7 cm)', 'Lainnya (tulis di sinopsis)'];
 
 function pengajuan_milik(int $id, array $u): array
 {
@@ -69,7 +68,12 @@ function pengaju_ubah(bool $post, string $id): void
 function formulir_pengajuan(array $u, ?array $p, bool $post): void
 {
 	$revisi = $p && $p['status'] === 'PERLU_REVISI';
-	$v = $p ?: ['judul' => '', 'subjudul' => '', 'penulis' => $u['nama'], 'kategori' => '', 'sinopsis' => '', 'perkiraan_halaman' => '', 'ukuran' => UKURAN_BUKU[0], 'jumlah_cetak_diminta' => '', 'jenis_karya' => 'asli'];
+	$v = $p ?: ['judul' => '', 'subjudul' => '', 'penulis' => $u['nama'], 'kategori' => '', 'sinopsis' => '', 'perkiraan_halaman' => '', 'jumlah_cetak_diminta' => CETAK_MIN, 'jenis_karya' => 'asli'] + cetak_bawaan();
+	if ($p) { // pengajuan lama yang belum punya spesifikasi cetak
+		foreach (cetak_bawaan() as $k => $bawaan) {
+			$v[$k] = isset(PILIHAN_CETAK[$k][1][$v[$k] ?? '']) ? $v[$k] : $bawaan;
+		}
+	}
 	$galat = [];
 
 	if ($post) {
@@ -80,10 +84,12 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			'kategori' => input('kategori'),
 			'sinopsis' => input('sinopsis'),
 			'perkiraan_halaman' => (int) input('perkiraan_halaman'),
-			'ukuran' => in_array(input('ukuran'), UKURAN_BUKU, true) ? input('ukuran') : UKURAN_BUKU[0],
 			'jumlah_cetak_diminta' => max(0, (int) input('jumlah_cetak_diminta')),
 			'jenis_karya' => isset(JENIS_KARYA[input('jenis_karya')]) ? input('jenis_karya') : 'asli',
 		]);
+		foreach (PILIHAN_CETAK as $k => [, $opsi]) {
+			$v[$k] = isset($opsi[input($k)]) ? input($k) : array_key_first($opsi);
+		}
 		$kirim = ($_POST['aksi'] ?? '') === 'kirim';
 		if (mb_strlen($v['judul']) < 3) {
 			$galat[] = 'Isi judul buku.';
@@ -94,21 +100,23 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 					$galat[] = "Isi $label.";
 				}
 			}
-			if ($v['jumlah_cetak_diminta'] < 1) {
-				$galat[] = 'Isi jumlah eksemplar yang ingin dicetak.';
+			if ($v['jumlah_cetak_diminta'] < CETAK_MIN) {
+				$galat[] = 'Jumlah cetak minimal ' . CETAK_MIN . ' eksemplar (2 Perpusnas RI, 1 Perpusda, 1 arsip penerbit, 1 penulis).';
 			}
 		}
 
 		if (!$galat) {
+			$kolom_cetak = array_keys(PILIHAN_CETAK);
+			$nilai_cetak = array_map(fn ($k) => $v[$k], $kolom_cetak);
 			db()->beginTransaction();
 			try {
 				if ($p) {
-					q('UPDATE pengajuan SET judul=?, subjudul=?, penulis=?, kategori=?, sinopsis=?, perkiraan_halaman=?, ukuran=?, jumlah_cetak_diminta=?, jenis_karya=?, diubah=? WHERE id=?',
-						[$v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['jumlah_cetak_diminta'], $v['jenis_karya'], sekarang(), $p['id']]);
+					q('UPDATE pengajuan SET judul=?, subjudul=?, penulis=?, kategori=?, sinopsis=?, perkiraan_halaman=?, ' . implode('=?, ', $kolom_cetak) . '=?, jumlah_cetak_diminta=?, jenis_karya=?, diubah=? WHERE id=?',
+						[$v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], ...$nilai_cetak, ...[$v['jumlah_cetak_diminta'], $v['jenis_karya'], sekarang(), $p['id']]]);
 					$id = (int) $p['id'];
 				} else {
-					q('INSERT INTO pengajuan (pengguna_id, judul, subjudul, penulis, kategori, sinopsis, perkiraan_halaman, ukuran, jumlah_cetak_diminta, jenis_karya, status, dibuat, diubah) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-						[$u['id'], $v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['jumlah_cetak_diminta'], $v['jenis_karya'], 'DRAF', sekarang(), sekarang()]);
+					q('INSERT INTO pengajuan (pengguna_id, judul, subjudul, penulis, kategori, sinopsis, perkiraan_halaman, ' . implode(', ', $kolom_cetak) . ', jumlah_cetak_diminta, jenis_karya, status, dibuat, diubah) VALUES (' . implode(',', array_fill(0, 12 + count($kolom_cetak), '?')) . ')',
+						[$u['id'], $v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], ...$nilai_cetak, ...[$v['jumlah_cetak_diminta'], $v['jenis_karya'], 'DRAF', sekarang(), sekarang()]]);
 					$id = (int) db()->lastInsertId();
 					catat($id, (int) $u['id'], 'Pengajuan dibuat.', true);
 				}
@@ -172,9 +180,9 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			$berkas_ada .= $b ? '<p class="berkas-ada">' . e(JENIS_BERKAS[$j][0]) . ' tersimpan: <a href="' . e(url('/berkas/' . $b['id'])) . '">' . e($b['nama_asli']) . '</a></p>' : '';
 		}
 	}
-	$opsi_ukuran = '';
-	foreach (UKURAN_BUKU as $uk) {
-		$opsi_ukuran .= '<option' . ($uk === $v['ukuran'] ? ' selected' : '') . '>' . e($uk) . '</option>';
+	$pilihan_cetak = '';
+	foreach (PILIHAN_CETAK as $k => [$judul, $opsi]) {
+		$pilihan_cetak .= pilih_kartu($k, $judul, $opsi, (string) $v[$k]);
 	}
 	$kategori = array_column(semua("SELECT DISTINCT kategori FROM buku WHERE kategori <> '' ORDER BY kategori"), 'kategori');
 	$daftar_kategori = implode('', array_map(fn ($k) => '<option value="' . e($k) . '">', array_unique(array_merge($kategori, ['Pendidikan', 'Metodologi Penelitian', 'Matematika dan Statistika', 'Pendidikan Digital', 'Sosial dan Humaniora', 'Agama', 'Kesehatan', 'Ekonomi dan Manajemen']))));
@@ -195,12 +203,26 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			<textarea id="penulis" name="penulis" rows="3">' . e($v['penulis']) . '</textarea>
 			<div class="kolom-2">
 				<div><label for="kategori">Kategori *</label><input id="kategori" name="kategori" list="daftar-kategori" value="' . e($v['kategori']) . '"><datalist id="daftar-kategori">' . $daftar_kategori . '</datalist></div>
-				<div><label for="ukuran">Ukuran buku</label><select id="ukuran" name="ukuran">' . $opsi_ukuran . '</select></div>
 				<div><label for="perkiraan_halaman">Perkiraan jumlah halaman</label><input type="number" min="0" id="perkiraan_halaman" name="perkiraan_halaman" value="' . e($v['perkiraan_halaman'] ?: '') . '"></div>
-				<div><label for="jumlah_cetak_diminta">Jumlah eksemplar dicetak *</label><input type="number" min="1" id="jumlah_cetak_diminta" name="jumlah_cetak_diminta" value="' . e($v['jumlah_cetak_diminta'] ?: '') . '"></div>
 			</div>
 			<label for="sinopsis">Sinopsis / deskripsi buku *</label>
 			<textarea id="sinopsis" name="sinopsis" rows="6">' . e($v['sinopsis']) . '</textarea>
+		</fieldset>
+		<fieldset><legend>Spesifikasi cetak</legend>
+			<p class="catatan">Pilih spesifikasi buku cetak Anda. Gambar di setiap pilihan adalah ilustrasi untuk membantu membedakannya. Biaya pelunasan dihitung redaksi berdasarkan pilihan ini dan jumlah eksemplar.</p>
+			' . $pilihan_cetak . '
+			<label for="jumlah_cetak_diminta">Jumlah eksemplar dicetak * <span class="catatan">(minimal ' . CETAK_MIN . ')</span></label>
+			<input type="number" min="' . CETAK_MIN . '" id="jumlah_cetak_diminta" name="jumlah_cetak_diminta" class="input-pendek" value="' . e($v['jumlah_cetak_diminta'] ?: '') . '">
+			<div class="rincian-wajib">
+				<p><strong>Minimal ' . CETAK_MIN . ' eksemplar</strong>, karena buku ber-ISBN wajib diserahkan sebagai berikut:</p>
+				<ul>
+					<li><span>2</span> Perpustakaan Nasional RI</li>
+					<li><span>1</span> Perpustakaan Daerah (Perpusda)</li>
+					<li><span>1</span> Arsip penerbit (Literaindo Press)</li>
+					<li><span>1</span> Untuk penulis</li>
+				</ul>
+				<p class="catatan">Jumlah di atas ' . CETAK_MIN . ' eksemplar menjadi tambahan untuk penulis.</p>
+			</div>
 		</fieldset>
 		<fieldset><legend>Berkas</legend>
 			' . $berkas_ada . '
@@ -223,6 +245,18 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 </section>';
 	$isi .= '<script>document.querySelectorAll("[data-jenis-karya]").forEach(function(s){function f(){document.querySelectorAll(".berkas-tambahan").forEach(function(d){d.hidden=d.dataset.untuk!==s.value;});}s.addEventListener("change",f);f();});</script>';
 	tampil($judul, $isi, ['panel' => menu_pengaju($p ? '' : '/akun/pengajuan/baru')]);
+}
+
+/** Pilihan bergambar (radio) untuk spesifikasi cetak. */
+function pilih_kartu(string $nama, string $judul, array $opsi, string $terpilih): string
+{
+	$out = '<fieldset class="pilih-kartu"><legend>' . e($judul) . ' *</legend><div class="pilih-kartu__grid">';
+	foreach ($opsi as $nilai => [$label, $ket, $gambar]) {
+		$out .= '<label class="kartu-opsi"><input type="radio" name="' . e($nama) . '" value="' . e((string) $nilai) . '"' . ((string) $nilai === $terpilih ? ' checked' : '') . '>'
+			. '<img src="' . e(url('/assets/img/cetak/' . $gambar . '.svg')) . '" alt="" width="160" height="120" loading="lazy">'
+			. '<strong>' . e($label) . '</strong><span>' . e($ket) . '</span></label>';
+	}
+	return $out . '</div></fieldset>';
 }
 
 function stepper(string $status): string
@@ -332,7 +366,7 @@ function pengaju_detail(bool $post, string $id): void
 		'PERLU_REVISI' => '<p>Redaksi meminta perbaikan naskah. Baca catatan di bagian Riwayat, lalu kirim naskah revisi.</p><p><a class="tombol" href="' . e(url("/akun/pengajuan/$pid/ubah")) . '">Kirim Naskah Revisi</a></p>',
 		'PROSES_ISBN' => '<p>Naskah selesai diproses dan sedang diajukan ISBN ke Perpustakaan Nasional.</p>' . ($buku ? '<p>Halaman buku Anda: <a href="' . e(url(buku_url($buku))) . '">' . e(url_absolut(buku_url($buku))) . '</a></p>' : '')
 			. ($p['tagihan_2'] ? '<p class="catatan">Tagihan pelunasan ' . rupiah($p['tagihan_2']) . ' dibayar setelah ISBN terbit.</p>' : ''),
-		'MENUNGGU_BAYAR_2' => pembayaran_ditolak($pid, 2) . '<div class="tagihan"><div><p>Pelunasan biaya cetak</p><p class="tagihan__nominal">' . rupiah($p['tagihan_2']) . '</p><p class="catatan">' . e($p['jumlah_cetak'] . ' eksemplar' . ($p['rincian_tagihan_2'] ? ' · ' . $p['rincian_tagihan_2'] : '')) . '</p>' . form_bukti(2) . '</div>' . blok_qris((int) $p['tagihan_2']) . '</div>',
+		'MENUNGGU_BAYAR_2' => pembayaran_ditolak($pid, 2) . '<div class="tagihan"><div><p>Pelunasan biaya cetak</p><p class="tagihan__nominal">' . rupiah($p['tagihan_2']) . '</p><p class="catatan">' . e($p['jumlah_cetak'] . ' eksemplar' . ($p['rincian_tagihan_2'] ? ' · ' . $p['rincian_tagihan_2'] : '')) . '</p><p class="catatan">Spesifikasi: ' . e(ringkas_cetak($p)) . '</p>' . form_bukti(2) . '</div>' . blok_qris((int) $p['tagihan_2']) . '</div>',
 		'LUNAS' => '<p>Pembayaran lunas. Buku Anda masuk antrean cetak.</p>',
 		'SELESAI' => '<p>Buku sudah dicetak dan dikirim.' . ($p['resi'] ? ' Nomor resi: <strong>' . e($p['resi']) . '</strong>' : '') . '</p>' . ($buku ? '<p>Halaman buku: <a href="' . e(url(buku_url($buku))) . '">' . e(url_absolut(buku_url($buku))) . '</a></p>' : ''),
 		'DITOLAK' => '<p>Pengajuan ini tidak dapat diproses. Alasannya ada di bagian Riwayat.</p>',
@@ -349,7 +383,7 @@ function pengaju_detail(bool $post, string $id): void
 		<section><h2>Data buku</h2><dl class="data-ringkas">
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
-			<div><dt>Ukuran</dt><dd>' . e($p['ukuran']) . '</dd></div>
+			' . data_cetak($p) . '
 			<div><dt>Jumlah cetak</dt><dd>' . e((string) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta'])) . ' eksemplar</dd></div>' . $isbn . '
 		</dl>
 		<h2>Berkas</h2>' . daftar_berkas($pid) . '</section>

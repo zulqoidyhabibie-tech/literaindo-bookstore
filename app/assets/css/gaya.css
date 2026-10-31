@@ -1596,3 +1596,256 @@ ul.pesan {
 		transition: none !important;
 	}
 }
+
+/* Spesifikasi cetak: pilihan bergambar */
+.formulir fieldset.pilih-kartu {
+	border: 0;
+	padding: 0;
+	margin: 0.9rem 0 0;
+}
+
+.formulir .pilih-kartu legend {
+	padding: 0;
+	margin-bottom: 0.45rem;
+	color: var(--teks);
+	font-size: 0.95rem;
+}
+
+.pilih-kartu__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.6rem;
+}
+
+.formulir label.kartu-opsi {
+	position: relative;
+	display: grid;
+	align-content: start;
+	gap: 0.3rem;
+	margin: 0;
+	padding: 0.55rem;
+	border: 2px solid var(--garis);
+	border-radius: 8px;
+	background: #fff;
+	font-weight: 400;
+	cursor: pointer;
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.kartu-opsi:hover {
+	border-color: color-mix(in srgb, var(--warna-utama) 45%, #fff);
+}
+
+.kartu-opsi input {
+	position: absolute;
+	top: 0.7rem;
+	right: 0.7rem;
+	width: 1.15rem;
+	height: 1.15rem;
+	margin: 0;
+	accent-color: var(--warna-utama);
+}
+
+.kartu-opsi img {
+	width: 100%;
+	height: auto;
+	aspect-ratio: 4 / 3;
+	border-radius: 5px;
+}
+
+.kartu-opsi strong {
+	color: var(--tinta);
+	font-size: 0.95rem;
+	line-height: 1.3;
+}
+
+.kartu-opsi span {
+	color: var(--redup);
+	font-size: 0.82rem;
+	line-height: 1.4;
+}
+
+.kartu-opsi:has(input:checked) {
+	border-color: var(--warna-utama);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--warna-utama) 18%, transparent);
+	background: color-mix(in srgb, var(--warna-utama) 4%, #fff);
+}
+
+.kartu-opsi:has(input:focus-visible) {
+	outline: 3px solid var(--aksen);
+	outline-offset: 2px;
+}
+
+.formulir .input-pendek {
+	max-width: 12rem;
+}
+
+.rincian-wajib {
+	margin-top: 0.6rem;
+	padding: 0.8rem 1rem;
+	border-left: 4px solid var(--aksen);
+	border-radius: var(--sudut);
+	background: #fdf7e6;
+}
+
+.rincian-wajib p {
+	margin: 0;
+}
+
+.rincian-wajib ul {
+	list-style: none;
+	margin: 0.5rem 0;
+	padding: 0;
+	display: grid;
+	gap: 0.3rem;
+}
+
+.rincian-wajib li {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+}
+
+.rincian-wajib li span {
+	display: inline-grid;
+	place-items: center;
+	min-width: 1.7rem;
+	height: 1.7rem;
+	border-radius: 50%;
+	background: var(--warna-utama);
+	color: #fff;
+	font-weight: 700;
+	font-size: 0.85rem;
+}
+
+@media (max-width: 480px) {
+	.pilih-kartu__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.formulir .subjudul-form {
+	margin: 0.9rem 0 0;
+	font-size: 0.95rem;
+	color: var(--warna-utama);
+}
+
+.formulir .subjudul-form:first-child {
+	margin-top: 0;
+}
+
+/* Harga cetak & taksiran */
+.tabel-harga td {
+	vertical-align: middle;
+	padding: 0.35rem 0.6rem;
+}
+
+.tabel-harga__grup th {
+	background: #e8f1ed;
+	color: var(--tinta);
+}
+
+.tabel-harga__kode {
+	font-family: ui-monospace, Consolas, monospace;
+	font-size: 0.85rem;
+}
+
+.formulir .tabel-harga input.isian-harga,
+.formulir .tabel-harga input.isian-kecil {
+	min-height: 36px;
+	padding: 0.3rem 0.5rem;
+	text-align: right;
+}
+
+.formulir .tabel-harga input.isian-harga {
+	width: 7.5rem;
+}
+
+.formulir .tabel-harga input.isian-kecil {
+	width: 4.5rem;
+}
+
+.formulir label.hapus-baris {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	margin: 0;
+	font-weight: 400;
+	font-size: 0.85rem;
+	color: var(--segera);
+	white-space: nowrap;
+}
+
+.tambah-harga {
+	margin: 0.5rem 0 1.5rem;
+}
+
+.tambah-harga summary {
+	cursor: pointer;
+	font-weight: 600;
+	color: var(--warna-utama);
+}
+
+.baris-tambah {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.6rem;
+}
+
+.formulir .baris-tambah label {
+	display: grid;
+	gap: 0.25rem;
+	margin: 0;
+}
+
+.kotak-cara {
+	margin-bottom: 1.5rem;
+}
+
+.taksiran {
+	width: 100%;
+	margin: 0.6rem 0;
+	border-collapse: collapse;
+	background: #fff;
+	border: 1px solid var(--garis);
+	border-radius: var(--sudut);
+	font-size: 0.95rem;
+}
+
+.taksiran th,
+.taksiran td {
+	padding: 0.55rem 0.75rem;
+	border-bottom: 1px solid var(--garis);
+	text-align: left;
+}
+
+.taksiran td:last-child {
+	text-align: right;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.taksiran td:nth-child(2) {
+	color: var(--redup);
+}
+
+.taksiran__total th,
+.taksiran__total td {
+	background: #e8f1ed;
+	color: var(--tinta);
+	font-size: 1.05rem;
+	border-bottom: 0;
+}
+
+.tautan-tombol {
+	margin-top: 0.3rem;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--warna-utama);
+	font: inherit;
+	font-size: 0.85rem;
+	text-decoration: underline;
+	cursor: pointer;
+	justify-self: start;
+}

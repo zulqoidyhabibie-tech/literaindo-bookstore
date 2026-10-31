@@ -72,7 +72,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=9';
+	$css = url('/assets/css/gaya.css') . '?v=11';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -147,7 +147,7 @@ function menu_pengaju(string $aktif): string
 
 function menu_admin(string $aktif): string
 {
-	return menu_panel(['/admin' => 'Dasbor', '/admin/pengajuan' => 'Pengajuan', '/admin/buku' => 'Katalog', '/keuangan' => 'Keuangan', '/admin/pengguna' => 'Pengguna', '/admin/pengaturan' => 'Pengaturan'], $aktif);
+	return menu_panel(['/admin' => 'Dasbor', '/admin/pengajuan' => 'Pengajuan', '/admin/buku' => 'Katalog', '/admin/harga' => 'Harga Cetak', '/keuangan' => 'Keuangan', '/admin/pengguna' => 'Pengguna', '/admin/pengaturan' => 'Pengaturan'], $aktif);
 }
 
 function menu_keuangan(string $aktif): string
