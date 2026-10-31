@@ -22,7 +22,7 @@ function skema_notifikasi(string $driver): string
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 4) {
+	if ($versi >= 5) {
 		return;
 	}
 	if ($versi < 2) {
@@ -40,7 +40,15 @@ function pastikan_skema(): void
 	} catch (PDOException) {
 		db()->exec('ALTER TABLE pembayaran ADD COLUMN pemeriksa_id ' . ((config()['db']['driver'] ?? 'mysql') === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED') . ' NULL');
 	}
-	simpan_pengaturan('versi_skema', '4');
+	// v5: spesifikasi cetak (sisi, warna, kertas, cover, laminasi)
+	try {
+		db()->query('SELECT sisi_cetak FROM pengajuan LIMIT 1');
+	} catch (PDOException) {
+		foreach (['sisi_cetak', 'warna_isi', 'jenis_kertas', 'jenis_sampul', 'laminasi'] as $kolom) {
+			db()->exec("ALTER TABLE pengajuan ADD COLUMN $kolom VARCHAR(20) NOT NULL DEFAULT ''");
+		}
+	}
+	simpan_pengaturan('versi_skema', '5');
 }
 
 function skema(string $driver): array
@@ -96,6 +104,11 @@ function skema(string $driver): array
 			ukuran VARCHAR(60) NOT NULL DEFAULT '',
 			jumlah_cetak_diminta INT NOT NULL DEFAULT 0,
 			jenis_karya VARCHAR(20) NOT NULL DEFAULT 'asli',
+			sisi_cetak VARCHAR(20) NOT NULL DEFAULT '',
+			warna_isi VARCHAR(20) NOT NULL DEFAULT '',
+			jenis_kertas VARCHAR(20) NOT NULL DEFAULT '',
+			jenis_sampul VARCHAR(20) NOT NULL DEFAULT '',
+			laminasi VARCHAR(20) NOT NULL DEFAULT '',
 			jumlah_cetak INT NOT NULL DEFAULT 0,
 			halaman_final VARCHAR(40) NOT NULL DEFAULT '',
 			tagihan_2 INT NOT NULL DEFAULT 0,
