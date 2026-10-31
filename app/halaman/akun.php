@@ -79,6 +79,7 @@ function halaman_daftar(bool $post): void
 			session_regenerate_id(true);
 			$_SESSION['uid'] = (int) db()->lastInsertId();
 			kirim_email($v['email'], 'Selamat datang di Literaindo Press', "Halo {$v['nama']},\n\nAkun Anda sudah aktif. Ajukan naskah buku Anda di: " . url_absolut('/akun/pengajuan/baru') . "\n\nSalam,\nLiteraindo Press");
+			notif_admin('Penulis baru mendaftar: ' . $v['nama'] . ' (' . $v['email'] . ')', '/admin/pengguna');
 			pesan('Akun berhasil dibuat. Silakan ajukan buku Anda.');
 			arahkan('/akun/pengajuan/baru');
 		}

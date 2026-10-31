@@ -82,6 +82,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		try {
 			if ($aksi === 'catatan' && input('isi') !== '') {
 				catat($pid, $aid, mb_substr(input('isi'), 0, 3000));
+				notif_pengajuan($p, 'Pesan dari admin: ' . mb_substr(input('isi'), 0, 200));
 				q('UPDATE pengajuan SET diubah = ? WHERE id = ?', [sekarang(), $pid]);
 				$pemilik = satu('SELECT * FROM pengguna WHERE id = ?', [$p['pengguna_id']]);
 				kirim_email($pemilik['email'], 'Pesan baru untuk pengajuan "' . $p['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin Literaindo Press mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/pengajuan/$pid"));

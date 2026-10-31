@@ -255,6 +255,7 @@ function ubah_status(array $p, string $baru, ?string $keterangan = null): void
 	$u = pengguna();
 	q('UPDATE pengajuan SET status = ?, diubah = ? WHERE id = ?', [$baru, sekarang(), $p['id']]);
 	catat((int) $p['id'], $u ? (int) $u['id'] : null, 'Status: ' . STATUS[$baru][0] . ($keterangan ? '. ' . $keterangan : ''), true);
+	notif_pengajuan($p, STATUS[$baru][0] . ($keterangan ? '. ' . $keterangan : ''));
 
 	$pemilik = satu('SELECT * FROM pengguna WHERE id = ?', [$p['pengguna_id']]);
 	if ($pemilik) {
@@ -266,6 +267,36 @@ function ubah_status(array $p, string $baru, ?string $keterangan = null): void
 			. "\nLihat detailnya di: " . url_absolut('/akun/pengajuan/' . $p['id']) . "\n\nSalam,\nLiteraindo Press"
 		);
 	}
+}
+
+// ---------- Notifikasi (ikon lonceng) ----------
+
+function notif(int $uid, string $pesan, string $tautan = ''): void
+{
+	q('INSERT INTO notifikasi (pengguna_id, pesan, tautan, dibaca, dibuat) VALUES (?, ?, ?, 0, ?)', [$uid, mb_substr($pesan, 0, 500), $tautan, sekarang()]);
+}
+
+function notif_admin(string $pesan, string $tautan = ''): void
+{
+	foreach (semua("SELECT id FROM pengguna WHERE peran = 'admin'") as $a) {
+		notif((int) $a['id'], $pesan, $tautan);
+	}
+}
+
+/** Beri tahu pihak lawan: penulis bila admin yang bertindak, admin bila penulis yang bertindak. */
+function notif_pengajuan(array $p, string $pesan): void
+{
+	$u = pengguna();
+	if ($u && $u['peran'] !== 'admin') {
+		notif_admin('"' . $p['judul'] . '" (' . $u['nama'] . '): ' . $pesan, '/admin/pengajuan/' . $p['id']);
+	} else {
+		notif((int) $p['pengguna_id'], '"' . $p['judul'] . '": ' . $pesan, '/akun/pengajuan/' . $p['id']);
+	}
+}
+
+function jumlah_notif(int $uid): int
+{
+	return (int) (satu('SELECT COUNT(*) AS n FROM notifikasi WHERE pengguna_id = ? AND dibaca = 0', [$uid])['n'] ?? 0);
 }
 
 function url_absolut(string $path): string

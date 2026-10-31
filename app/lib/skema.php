@@ -3,6 +3,31 @@
 
 declare(strict_types=1);
 
+function skema_notifikasi(string $driver): string
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	return "CREATE TABLE IF NOT EXISTS notifikasi (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			pesan VARCHAR(500) NOT NULL,
+			tautan VARCHAR(255) NOT NULL DEFAULT '',
+			dibaca TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL
+		)$akhir";
+}
+
+/** Tambahkan tabel baru pada database yang dipasang dengan versi lama. */
+function pastikan_skema(): void
+{
+	if ((int) pengaturan('versi_skema', '1') >= 2) {
+		return;
+	}
+	db()->exec(skema_notifikasi(config()['db']['driver'] ?? 'mysql'));
+	simpan_pengaturan('versi_skema', '2');
+}
+
 function skema(string $driver): array
 {
 	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
@@ -98,6 +123,7 @@ function skema(string $driver): array
 			dibuat DATETIME NOT NULL,
 			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
 		)$akhir",
+		skema_notifikasi($driver),
 		"CREATE TABLE pengaturan (
 			k VARCHAR(60) NOT NULL PRIMARY KEY,
 			v $teks NOT NULL
