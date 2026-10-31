@@ -10,6 +10,22 @@ const JENIS_BERKAS = [
 	'sampul'     => ['Sampul', ['jpg', 'jpeg', 'png', 'webp'], 10],
 	'bukti_1'    => ['Bukti bayar biaya awal', ['jpg', 'jpeg', 'png', 'pdf'], 5],
 	'bukti_2'    => ['Bukti bayar pelunasan', ['jpg', 'jpeg', 'png', 'pdf'], 5],
+	// Dokumen tambahan sesuai jenis karya (diunggah penulis)
+	'izin_terjemah' => ['Surat izin penerjemahan', ['pdf', 'jpg', 'jpeg', 'png'], 5],
+	'pengalihan'    => ['Surat pengalihan penerbitan', ['pdf', 'jpg', 'jpeg', 'png'], 5],
+	'keterangan_pd' => ['Surat keterangan karya milik umum', ['pdf', 'jpg', 'jpeg', 'png'], 5],
+	// Berkas ISBN yang disiapkan admin
+	'permohonan_isbn'  => ['Surat permohonan ISBN', ['pdf', 'jpg', 'jpeg', 'png'], 5],
+	'halaman_awal'     => ['Halaman awal (judul, balik judul, kata pengantar, daftar isi)', ['pdf', 'doc', 'docx'], 20],
+	'naskah_watermark' => ['Naskah akhir ber-watermark', ['pdf'], 30],
+];
+
+/** Jenis karya => [label, berkas tambahan yang wajib, keterangan]. */
+const JENIS_KARYA = [
+	'asli'       => ['Karya asli', null, ''],
+	'terjemahan' => ['Karya terjemahan', 'izin_terjemah', 'Wajib melampirkan surat izin penerjemahan dari pemilik hak cipta.'],
+	'dialihkan'  => ['Dialihkan dari penerbit lain', 'pengalihan', 'Wajib melampirkan surat pengalihan penerbitan dari penerbit awal.'],
+	'milik_umum' => ['Karya milik umum (public domain)', 'keterangan_pd', 'Wajib melampirkan surat keterangan yang menyebutkan sumber karya asli.'],
 ];
 
 const MIME_DIIZINKAN = [

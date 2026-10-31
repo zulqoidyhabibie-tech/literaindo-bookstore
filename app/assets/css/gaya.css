@@ -700,6 +700,55 @@ main {
 	font-weight: 600;
 }
 
+.periksa {
+	list-style: none;
+	margin: 0.5rem 0;
+	padding: 0;
+	display: grid;
+	gap: 0.45rem;
+}
+
+.periksa li {
+	display: flex;
+	gap: 0.6rem;
+	align-items: flex-start;
+	overflow-wrap: anywhere;
+}
+
+.periksa__tanda {
+	flex: none;
+	width: 1.35rem;
+	height: 1.35rem;
+	margin-top: 0.1rem;
+	border-radius: 50%;
+	border: 2px solid #c9c9c9;
+	display: grid;
+	place-items: center;
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: #fff;
+}
+
+.periksa li.ada .periksa__tanda {
+	background: #1f9e55;
+	border-color: #1f9e55;
+}
+
+.periksa li.belum em {
+	color: #a0521c;
+}
+
+.berkas-tambahan {
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.25rem 0 0.25rem 0.9rem;
+	border-left: 3px solid var(--aksen);
+}
+
+.berkas-tambahan[hidden] {
+	display: none;
+}
+
 .daftar-notif {
 	list-style: none;
 	margin: 0;

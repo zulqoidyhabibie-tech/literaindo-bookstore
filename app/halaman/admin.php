@@ -80,7 +80,16 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		$catatan = mb_substr(input('catatan'), 0, 2000);
 		$s = $p['status'];
 		try {
-			if ($aksi === 'catatan' && input('isi') !== '') {
+			if ($aksi === 'berkas_isbn') {
+				$n = 0;
+				foreach (['permohonan_isbn', 'halaman_awal', 'naskah_watermark'] as $j) {
+					$n += simpan_unggahan($j, $j, $pid) ? 1 : 0;
+				}
+				if ($n) {
+					catat($pid, $aid, $n . ' berkas ISBN diunggah admin.', true);
+				}
+				pesan($n ? 'Berkas ISBN tersimpan.' : 'Pilih minimal satu berkas untuk diunggah.', $n ? 'ok' : 'info');
+			} elseif ($aksi === 'catatan' && input('isi') !== '') {
 				catat($pid, $aid, mb_substr(input('isi'), 0, 3000));
 				notif_pengajuan($p, 'Pesan dari admin: ' . mb_substr(input('isi'), 0, 200));
 				q('UPDATE pengajuan SET diubah = ? WHERE id = ?', [sekarang(), $pid]);
@@ -196,6 +205,36 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		'DITOLAK' => '<p>Pengajuan ditolak.</p>',
 		default => '',
 	};
+	// Daftar periksa berkas ISBN sesuai ketentuan Perpusnas.
+	$jk = JENIS_KARYA[$p['jenis_karya'] ?? 'asli'] ?? JENIS_KARYA['asli'];
+	$cek = [
+		['a', 'Surat permohonan ISBN (kop surat, tanda tangan pimpinan, stempel)', 'permohonan_isbn'],
+		['b', 'Halaman awal: judul, balik judul, kata pengantar, daftar isi', 'halaman_awal'],
+		['c', 'Naskah akhir terbitan ber-watermark', 'naskah_watermark'],
+		['d', 'Surat pernyataan keaslian karya bermeterai', 'pernyataan'],
+	];
+	foreach (['izin_terjemah' => 'e', 'pengalihan' => 'f', 'keterangan_pd' => 'g'] as $j => $huruf) {
+		if ($jk[1] === $j) {
+			$cek[] = [$huruf, JENIS_BERKAS[$j][0], $j];
+		}
+	}
+	$li = '';
+	foreach ($cek as [$huruf, $label, $j]) {
+		$b = berkas_terakhir($pid, $j);
+		$li .= '<li class="' . ($b ? 'ada' : 'belum') . '"><span class="periksa__tanda" aria-hidden="true">' . ($b ? '✓' : '') . '</span><span><strong>' . $huruf . '.</strong> ' . e($label)
+			. ($b ? ' · <a href="' . e(url('/berkas/' . $b['id'])) . '">' . e($b['nama_asli']) . '</a>' : ' · <em>belum ada</em>') . '</span></li>';
+	}
+	$li .= '<li class="' . ($buku ? 'ada' : 'belum') . '"><span class="periksa__tanda" aria-hidden="true">' . ($buku ? '✓' : '') . '</span><span><strong>h.</strong> Link katalog buku di website'
+		. ($buku ? ' · <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a>' : ' · <em>dibuat saat tagihan pelunasan ditetapkan</em>') . '</span></li>';
+	$kotak_isbn = $p['status'] === 'DRAF' ? '' : '<div class="kotak-langkah"><h2>Berkas ISBN</h2>
+		<p class="catatan">Jenis karya: <strong>' . e($jk[0]) . '</strong>. Lengkapi semua butir sebelum mengajukan ke isbn.perpusnas.go.id.</p>
+		<ul class="periksa">' . $li . '</ul>
+		<details><summary>Unggah berkas a, b, c</summary><form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="berkas_isbn">
+			<label for="permohonan_isbn">a. Surat permohonan ISBN <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label><input type="file" id="permohonan_isbn" name="permohonan_isbn" accept=".pdf,.jpg,.jpeg,.png">
+			<label for="halaman_awal">b. Halaman awal <span class="catatan">(PDF/DOC/DOCX, maks. 20 MB)</span></label><input type="file" id="halaman_awal" name="halaman_awal" accept=".pdf,.doc,.docx">
+			<label for="naskah_watermark">c. Naskah akhir ber-watermark <span class="catatan">(PDF, maks. 30 MB)</span></label><input type="file" id="naskah_watermark" name="naskah_watermark" accept=".pdf">
+			<button type="submit" class="tombol">Simpan Berkas</button></form></details></div>';
+
 	if (!in_array($p['status'], ['SELESAI', 'DITOLAK'], true)) {
 		$aksi .= '<details class="bahaya"><summary>Tolak pengajuan</summary>' . $form('tolak', $catatan_input('Alasan penolakan (dikirim ke penulis)', 'c-tolak'), 'Tolak Pengajuan', 'tombol tombol--bahaya') . '</details>';
 	}
@@ -205,6 +244,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 	<div class="judul-baris"><h1>' . e($p['judul']) . '</h1>' . label_status($p['status']) . '</div>
 	' . ($p['status'] !== 'DITOLAK' ? stepper($p['status']) : '') . '
 	<div class="kotak-langkah kotak-langkah--admin"><h2>Tindakan</h2>' . $aksi . '</div>
+	' . $kotak_isbn . '
 	<div class="dua-kolom">
 		<section><h2>Pengaju</h2><dl class="data-ringkas">
 			<div><dt>Nama</dt><dd>' . e($pengaju['nama']) . '</dd></div>
@@ -215,6 +255,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			<div><dt>Subjudul</dt><dd>' . e($p['subjudul']) . '</dd></div>
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
+			<div><dt>Jenis karya</dt><dd>' . e($jk[0]) . '</dd></div>
 			<div><dt>Ukuran</dt><dd>' . e($p['ukuran']) . '</dd></div>
 			<div><dt>Perkiraan halaman</dt><dd>' . e((string) $p['perkiraan_halaman']) . '</dd></div>
 			<div><dt>Cetak diminta</dt><dd>' . e((string) $p['jumlah_cetak_diminta']) . ' eksemplar</dd></div>
