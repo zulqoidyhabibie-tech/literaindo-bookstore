@@ -6,7 +6,7 @@ declare(strict_types=1);
 function halaman_masuk(bool $post): void
 {
 	if (pengguna()) {
-		arahkan(pengguna()['peran'] === 'admin' ? '/admin' : '/akun');
+		arahkan(beranda_peran(pengguna()['peran']));
 	}
 	$email = '';
 	$galat = '';
@@ -22,7 +22,7 @@ function halaman_masuk(bool $post): void
 				header('Location: ' . $kembali, true, 303);
 				exit;
 			}
-			arahkan($u['peran'] === 'admin' ? '/admin' : '/akun');
+			arahkan(beranda_peran($u['peran']));
 		}
 		usleep(700000);
 		$galat = 'Email atau kata sandi salah.';

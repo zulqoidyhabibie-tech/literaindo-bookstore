@@ -749,6 +749,31 @@ main {
 	display: none;
 }
 
+.kotak-status-grid--uang {
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.kotak-status-grid--uang .kotak-status__angka {
+	font-size: 1.3rem;
+	overflow-wrap: anywhere;
+}
+
+.filter--keuangan {
+	align-items: flex-end;
+}
+
+.filter--keuangan label {
+	display: grid;
+	gap: 0.2rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	flex: 1 1 10rem;
+}
+
+.filter--keuangan .tombol {
+	flex: none;
+}
+
 .daftar-notif {
 	list-style: none;
 	margin: 0;

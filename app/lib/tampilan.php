@@ -54,7 +54,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 		$menu .= '<li><a href="' . e(url($m['url'])) . '"' . ($aktif ? ' aria-current="page"' : '') . '>' . e($m['label']) . '</a></li>';
 	}
 	$akun = $u
-		? '<a class="navigasi__akun" href="' . e(url($u['peran'] === 'admin' ? '/admin' : '/akun')) . '">' . ikon('akun') . '<span>' . e($u['peran'] === 'admin' ? 'Panel Admin' : 'Akun Saya') . '</span></a>'
+		? '<a class="navigasi__akun" href="' . e(url(beranda_peran($u['peran']))) . '">' . ikon('akun') . '<span>' . e(['admin' => 'Panel Admin', 'keuangan' => 'Panel Keuangan'][$u['peran']] ?? 'Akun Saya') . '</span></a>'
 		: '<a class="navigasi__akun" href="' . e(url('/masuk')) . '">' . ikon('akun') . '<span>Masuk</span></a>';
 
 	if ($u) {
@@ -147,7 +147,12 @@ function menu_pengaju(string $aktif): string
 
 function menu_admin(string $aktif): string
 {
-	return menu_panel(['/admin' => 'Dasbor', '/admin/pengajuan' => 'Pengajuan', '/admin/buku' => 'Katalog', '/admin/pengguna' => 'Pengguna', '/admin/pengaturan' => 'Pengaturan'], $aktif);
+	return menu_panel(['/admin' => 'Dasbor', '/admin/pengajuan' => 'Pengajuan', '/admin/buku' => 'Katalog', '/keuangan' => 'Keuangan', '/admin/pengguna' => 'Pengguna', '/admin/pengaturan' => 'Pengaturan'], $aktif);
+}
+
+function menu_keuangan(string $aktif): string
+{
+	return menu_panel(['/keuangan' => 'Transaksi', '/akun/profil' => 'Profil'], $aktif);
 }
 
 /** Blok QRIS dengan nominal yang harus dibayar. */

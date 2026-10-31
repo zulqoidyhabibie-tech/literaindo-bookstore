@@ -222,7 +222,29 @@ function pengguna(): ?array
 	return $u;
 }
 
-function wajib_masuk(?string $peran = null): array
+const PERAN = ['pengaju' => 'Penulis (pengaju)', 'keuangan' => 'Keuangan', 'admin' => 'Admin'];
+
+/** Halaman awal tiap peran setelah masuk. */
+function beranda_peran(string $peran): string
+{
+	return match ($peran) {
+		'admin' => '/admin',
+		'keuangan' => '/keuangan',
+		default => '/akun',
+	};
+}
+
+/** Menu panel sesuai peran. */
+function menu_peran(array $u, string $aktif = ''): string
+{
+	return match ($u['peran']) {
+		'admin' => menu_admin($aktif),
+		'keuangan' => menu_keuangan($aktif),
+		default => menu_pengaju($aktif),
+	};
+}
+
+function wajib_masuk(string|array|null $peran = null): array
 {
 	$u = pengguna();
 	if (!$u) {
@@ -230,9 +252,9 @@ function wajib_masuk(?string $peran = null): array
 		pesan('Silakan masuk terlebih dahulu.', 'info');
 		arahkan('/masuk');
 	}
-	if ($peran && $u['peran'] !== $peran) {
+	if ($peran && !in_array($u['peran'], (array) $peran, true)) {
 		http_response_code(403);
-		tampil('Akses ditolak', '<section class="panel konten"><h1>Akses ditolak</h1><p>Halaman ini hanya untuk admin.</p></section>');
+		tampil('Akses ditolak', '<section class="panel konten"><h1>Akses ditolak</h1><p>Akun Anda tidak memiliki akses ke halaman ini. <a href="' . e(url(beranda_peran($u['peran']))) . '">Kembali ke panel Anda</a>.</p></section>');
 		exit;
 	}
 	return $u;

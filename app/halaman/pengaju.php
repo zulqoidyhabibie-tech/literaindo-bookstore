@@ -28,8 +28,8 @@ function pengajuan_milik(int $id, array $u): array
 function pengaju_daftar(bool $post): void
 {
 	$u = wajib_masuk();
-	if ($u['peran'] === 'admin') {
-		arahkan('/admin');
+	if ($u['peran'] !== 'pengaju') {
+		arahkan(beranda_peran($u['peran']));
 	}
 	$daftar = semua('SELECT * FROM pengajuan WHERE pengguna_id = ? ORDER BY diubah DESC', [$u['id']]);
 	if (!$daftar) {
@@ -51,7 +51,7 @@ function pengaju_daftar(bool $post): void
 
 function pengaju_baru(bool $post): void
 {
-	$u = wajib_masuk();
+	$u = wajib_masuk(['pengaju', 'admin']);
 	formulir_pengajuan($u, null, $post);
 }
 
@@ -290,6 +290,9 @@ function pengaju_detail(bool $post, string $id): void
 	if ($u['peran'] === 'admin') {
 		arahkan('/admin/pengajuan/' . (int) $id);
 	}
+	if ($u['peran'] !== 'pengaju') {
+		arahkan(beranda_peran($u['peran']));
+	}
 	$p = pengajuan_milik((int) $id, $u);
 	$pid = (int) $p['id'];
 
@@ -391,14 +394,17 @@ function pengaju_profil(bool $post): void
 		</fieldset>
 		<button type="submit" class="tombol">Simpan</button>
 	</form></section>';
-	tampil('Profil', $isi, ['panel' => $u['peran'] === 'admin' ? menu_admin('') : menu_pengaju('/akun/profil')]);
+	tampil('Profil', $isi, ['panel' => menu_peran($u, '/akun/profil')]);
 }
 
 function unduh_berkas(bool $post, string $id): void
 {
 	$u = wajib_masuk();
 	$b = satu('SELECT b.*, p.pengguna_id FROM berkas b JOIN pengajuan p ON p.id = b.pengajuan_id WHERE b.id = ?', [(int) $id]);
-	if (!$b || ($u['peran'] !== 'admin' && (int) $b['pengguna_id'] !== (int) $u['id'])) {
+	$boleh = $b && ($u['peran'] === 'admin'
+		|| (int) $b['pengguna_id'] === (int) $u['id']
+		|| ($u['peran'] === 'keuangan' && in_array($b['jenis'], ['bukti_1', 'bukti_2'], true)));
+	if (!$boleh) {
 		tidak_ditemukan();
 	}
 	$inline = in_array(strtolower(pathinfo($b['path'], PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp', 'pdf'], true);
