@@ -1,39 +1,65 @@
-# Literaindo Press Bookstore
+# Literaindo Press
 
-Toko online resmi untuk buku cetak dan e-book terbitan **Literaindo Press**.
-Dibangun di atas WordPress + WooCommerce sesuai *Blueprint UI/UX dan Spesifikasi Teknis* v1.0.
+Website katalog resmi Literaindo Press: daftar buku dengan filter, halaman detail
+untuk setiap buku (link tetap untuk pengajuan ISBN), serta pemesanan melalui
+WhatsApp dan pembayaran QRIS BTN.
 
-## Struktur repositori
+Website ini statis (HTML, CSS, sedikit JavaScript) tanpa database, sehingga
+ringan, aman, dan murah di hosting.
+
+## Struktur
 
 ```
-literaindo-bookstore/
-├── wordpress/
-│   ├── themes/literaindo-child/      # child theme (induk: Storefront)
-│   └── plugins/literaindo-bookstore/ # fungsi khusus toko (metadata buku, QRIS BTN, e-book)
-├── design/                           # design tokens, sitemap, spesifikasi UI
-├── testing/                          # uji fungsional dan checklist peluncuran
-└── documentation/                    # panduan instalasi, admin, backup
+site/
+  data/situs.json   identitas penerbit, kontak, menu, warna utama
+  data/buku.json    daftar buku (satu objek per buku)
+  konten/*.html     halaman Tentang Kami, Layanan, Cara Pemesanan, dll.
+  assets/           CSS, JavaScript, logo, gambar QRIS, sampul buku
+  statis/           file yang disalin apa adanya (.htaccess)
+  build.mjs         pembuat website → folder dist/
+.github/workflows/deploy.yml   bangun otomatis ke cabang `deploy`
 ```
 
-## Dokumentasi
+## Menambah atau mengubah buku
 
-| Dokumen | Isi |
-|---|---|
-| [documentation/setup-guide.md](documentation/setup-guide.md) | Instalasi di hosting langkah demi langkah |
-| [documentation/admin-guide.md](documentation/admin-guide.md) | Menambah buku, halaman ISBN, memproses pesanan QRIS, e-book, refund |
-| [documentation/backup-recovery.md](documentation/backup-recovery.md) | Backup, uji pemulihan, pembaruan |
-| [testing/functional-tests.md](testing/functional-tests.md) | Skenario uji fungsional |
-| [testing/launch-checklist.md](testing/launch-checklist.md) | Checklist sebelum peluncuran |
+1. Simpan sampul (JPG/PNG/WebP, rasio 2:3, lebar ±600 px) di `site/assets/sampul/`.
+2. Tambahkan satu entri di `site/data/buku.json`:
 
-File zip tema dan plugin untuk diunggah ke WordPress:
+| Kolom | Isi |
+| --- | --- |
+| `slug` | bagian link, huruf kecil dan tanda minus. Jangan diubah setelah dikirim ke ISBN. |
+| `judul`, `subjudul` | judul buku |
+| `penulis` | daftar nama, misalnya `["Dr. A", "B, M.Pd."]` |
+| `editor`, `kategori`, `tahun`, `edisi`, `halaman`, `ukuran`, `bahasa` | data bibliografis |
+| `status` | `segera_terbit` (tampil, belum bisa dipesan) atau `terbit` |
+| `isbn`, `eisbn` | kosongkan dulu bila belum terbit |
+| `harga_cetak`, `harga_ebook` | angka tanpa titik; 0 = tidak dijual dalam format itu |
+| `sampul` | misalnya `/assets/sampul/judul-buku.jpg` |
+| `tanggal_tambah` | `YYYY-MM-DD`, untuk urutan di katalog |
+| `deskripsi` | paragraf dipisah baris kosong (`\n\n`) |
 
-```bash
-scripts/build-zips.sh        # hasil di dist/
+3. Commit ke `main`. GitHub Actions membangun website dan memperbarui cabang `deploy`.
+
+Link buku: `https://literaindo.com/buku/<slug>/`.
+
+## Mencoba di komputer
+
+```
+node site/build.mjs
+cd dist && python3 -m http.server 8000
 ```
 
-## Prinsip
+Buka http://localhost:8000.
 
-- Gunakan fitur bawaan WooCommerce sebanyak mungkin.
-- Jangan mengubah core WordPress/WooCommerce atau tema induk.
-- Kredensial dan file konfigurasi (`wp-config.php`, `.env`) tidak boleh masuk repositori.
-- Uji di staging sebelum produksi.
+## Pemasangan di Hostinger
+
+Hostinger hPanel → Websites → Kelola → Lanjutan → **GIT**:
+
+- Repositori: `git@github.com:zulqoidyhabibie-tech/literaindo-bookstore.git`
+- Cabang: `deploy`
+- Direktori: kosong (= `public_html`, harus kosong saat pertama dipasang)
+
+Karena repo privat, salin **SSH key** dari halaman GIT hPanel ke GitHub →
+Settings → Deploy keys (cukup akses baca). Untuk pembaruan otomatis, aktifkan
+**Auto Deployment** di hPanel dan simpan URL webhook-nya sebagai secret
+`HOSTINGER_WEBHOOK` di GitHub → Settings → Secrets and variables → Actions.

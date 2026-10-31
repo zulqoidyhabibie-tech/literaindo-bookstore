@@ -1,0 +1,44 @@
+# Bangun website dari folder site/ lalu simpan hasilnya di cabang "deploy".
+# Hostinger (hPanel → GIT) menarik cabang "deploy" ke public_html.
+name: Bangun website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  bangun:
+    runs-on: ubuntu-latest
+    env:
+      HOSTINGER_WEBHOOK: ${{ secrets.HOSTINGER_WEBHOOK }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bangun website
+        run: node site/build.mjs
+
+      - name: Kirim hasil ke cabang deploy
+        run: |
+          cd dist
+          git init -q -b deploy
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Website dari ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" deploy
+
+      - name: Beri tahu Hostinger (opsional)
+        if: ${{ env.HOSTINGER_WEBHOOK != '' }}
+        run: curl -fsS -X POST "$HOSTINGER_WEBHOOK"
