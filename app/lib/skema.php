@@ -1,0 +1,106 @@
+<?php
+// Struktur database. Ditulis agar jalan di MySQL (Hostinger) dan SQLite (uji lokal).
+
+declare(strict_types=1);
+
+function skema(string $driver): array
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$teks = $driver === 'sqlite' ? 'TEXT' : 'MEDIUMTEXT';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+	return [
+		"CREATE TABLE pengguna (
+			id $id,
+			nama VARCHAR(150) NOT NULL,
+			email VARCHAR(190) NOT NULL UNIQUE,
+			whatsapp VARCHAR(30) NOT NULL DEFAULT '',
+			sandi VARCHAR(255) NOT NULL,
+			peran VARCHAR(10) NOT NULL DEFAULT 'pengaju',
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE buku (
+			id $id,
+			slug VARCHAR(190) NOT NULL UNIQUE,
+			judul VARCHAR(255) NOT NULL,
+			subjudul VARCHAR(255) NOT NULL DEFAULT '',
+			penulis VARCHAR(500) NOT NULL DEFAULT '',
+			editor VARCHAR(255) NOT NULL DEFAULT '',
+			kategori VARCHAR(120) NOT NULL DEFAULT '',
+			tahun VARCHAR(10) NOT NULL DEFAULT '',
+			status VARCHAR(20) NOT NULL DEFAULT 'segera_terbit',
+			isbn VARCHAR(30) NOT NULL DEFAULT '',
+			eisbn VARCHAR(30) NOT NULL DEFAULT '',
+			edisi VARCHAR(120) NOT NULL DEFAULT '',
+			halaman VARCHAR(40) NOT NULL DEFAULT '',
+			ukuran VARCHAR(60) NOT NULL DEFAULT '',
+			bahasa VARCHAR(60) NOT NULL DEFAULT 'Indonesia',
+			harga_cetak INT NOT NULL DEFAULT 0,
+			harga_ebook INT NOT NULL DEFAULT 0,
+			sampul VARCHAR(255) NOT NULL DEFAULT '',
+			deskripsi $teks,
+			tampil TINYINT NOT NULL DEFAULT 1,
+			pengajuan_id $fk NULL,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE pengajuan (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			judul VARCHAR(255) NOT NULL,
+			subjudul VARCHAR(255) NOT NULL DEFAULT '',
+			penulis VARCHAR(500) NOT NULL DEFAULT '',
+			kategori VARCHAR(120) NOT NULL DEFAULT '',
+			sinopsis $teks,
+			perkiraan_halaman INT NOT NULL DEFAULT 0,
+			ukuran VARCHAR(60) NOT NULL DEFAULT '',
+			jumlah_cetak_diminta INT NOT NULL DEFAULT 0,
+			jumlah_cetak INT NOT NULL DEFAULT 0,
+			halaman_final VARCHAR(40) NOT NULL DEFAULT '',
+			tagihan_2 INT NOT NULL DEFAULT 0,
+			rincian_tagihan_2 VARCHAR(500) NOT NULL DEFAULT '',
+			resi VARCHAR(120) NOT NULL DEFAULT '',
+			status VARCHAR(30) NOT NULL DEFAULT 'DRAF',
+			buku_id $fk NULL,
+			dibuat DATETIME NOT NULL,
+			diubah DATETIME NOT NULL,
+			FOREIGN KEY (pengguna_id) REFERENCES pengguna(id)
+		)$akhir",
+		"CREATE TABLE berkas (
+			id $id,
+			pengajuan_id $fk NOT NULL,
+			jenis VARCHAR(20) NOT NULL,
+			path VARCHAR(255) NOT NULL,
+			nama_asli VARCHAR(255) NOT NULL,
+			ukuran INT NOT NULL DEFAULT 0,
+			pengunggah_id $fk NULL,
+			dibuat DATETIME NOT NULL,
+			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
+		)$akhir",
+		"CREATE TABLE pembayaran (
+			id $id,
+			pengajuan_id $fk NOT NULL,
+			tahap TINYINT NOT NULL,
+			nominal INT NOT NULL,
+			berkas_id $fk NULL,
+			status VARCHAR(12) NOT NULL DEFAULT 'menunggu',
+			catatan VARCHAR(500) NOT NULL DEFAULT '',
+			dibuat DATETIME NOT NULL,
+			diverifikasi DATETIME NULL,
+			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
+		)$akhir",
+		"CREATE TABLE catatan (
+			id $id,
+			pengajuan_id $fk NOT NULL,
+			pengguna_id $fk NULL,
+			isi $teks NOT NULL,
+			sistem TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL,
+			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
+		)$akhir",
+		"CREATE TABLE pengaturan (
+			k VARCHAR(60) NOT NULL PRIMARY KEY,
+			v $teks NOT NULL
+		)$akhir",
+	];
+}

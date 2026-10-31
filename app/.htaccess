@@ -1,24 +1,33 @@
 # Literaindo Press: pengaturan server (Hostinger/LiteSpeed/Apache)
 Options -Indexes
-DirectoryIndex index.html
-ErrorDocument 404 /404.html
+DirectoryIndex index.php
 
 RewriteEngine On
+
 # Selalu pakai HTTPS
 RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-# /buku/judul -> /buku/judul/
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME}/index.html -f
-RewriteRule ^(.*[^/])$ /$1/ [L,R=301]
+
+# Folder kode & data tidak boleh dibuka langsung
+RewriteRule ^(lib|halaman|data|konten)(/|$) - [F,L]
+RewriteRule (^|/)\. - [F,L]
+
+# File yang ada (gambar, CSS, JS) dilayani langsung; selebihnya ke index.php
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+RewriteRule ^ index.php [L,QSA]
 
 <IfModule mod_expires.c>
 	ExpiresActive On
-	ExpiresByType text/html "access plus 10 minutes"
 	ExpiresByType text/css "access plus 7 days"
 	ExpiresByType application/javascript "access plus 7 days"
 	ExpiresByType image/svg+xml "access plus 30 days"
 	ExpiresByType image/png "access plus 30 days"
 	ExpiresByType image/jpeg "access plus 30 days"
 	ExpiresByType image/webp "access plus 30 days"
+</IfModule>
+
+<IfModule mod_php.c>
+	php_value upload_max_filesize 32M
+	php_value post_max_size 40M
 </IfModule>
