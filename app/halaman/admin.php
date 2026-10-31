@@ -196,7 +196,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		$data['paket'] = data_paket();
 		$data['margin'] = $margin;
 		$data['per_buku_std'] = per_buku_standar();
-		$paket = isset(PAKET[$p['paket'] ?? '']) ? $p['paket'] : '';
+		$paket = isset(PAKET[$p['paket'] ?? '']) ? $p['paket'] : 'aksara'; // pengajuan lama (sebelum ada paket) dianggap Paket Aksara
 		$opsi_paket = '';
 		foreach ($data['paket'] as $k => $pk) {
 			$opsi_paket .= '<option value="' . $k . '"' . ($k === $paket ? ' selected' : '') . '>' . e($pk['nama'] . ' · ' . rupiah($pk['harga']) . ' · ' . $pk['eks'] . ' eks') . '</option>';
