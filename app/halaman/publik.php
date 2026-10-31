@@ -186,6 +186,10 @@ function halaman_konten(bool $post, string $slug): void
 	$mentah = (string) file_get_contents($file);
 	preg_match('/<!--\s*judul:\s*(.+?)\s*-->/', $mentah, $m);
 	$judul = $m[1] ?? $slug;
+	$ubahan = pengaturan('konten_' . $slug);
+	if ($ubahan !== '') {
+		$mentah = $ubahan;
+	}
 	$ganti = [
 		'badan_usaha' => e($SITUS['badan_usaha']),
 		'alamat' => e($SITUS['alamat']),

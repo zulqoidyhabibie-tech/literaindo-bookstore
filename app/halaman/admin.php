@@ -110,7 +110,11 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				$tagihan = (int) preg_replace('/\D/', '', input('tagihan_2'));
 				$paket = isset(PAKET[input('paket')]) ? input('paket') : '';
 				$min = $paket ? PAKET[$paket][1] : CETAK_MIN;
-				if ($jumlah < $min || $tagihan < 1) {
+				$digital = $paket !== '' && PAKET[$paket][1] === 0;
+				if ($digital) {
+					$jumlah = 0;
+				}
+				if ($jumlah < $min || ($tagihan < 1 && !$digital)) {
 					throw new RuntimeException('Isi nominal pelunasan dan jumlah cetak (minimal ' . $min . ' eksemplar).');
 				}
 				$spek = [];
@@ -148,8 +152,20 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				if ($p['buku_id']) {
 					q("UPDATE buku SET isbn = ?, eisbn = ?, status = 'terbit' WHERE id = ?", [$isbn, input('eisbn'), $p['buku_id']]);
 				}
-				ubah_status($p, 'MENUNGGU_BAYAR_2', 'ISBN terbit: ' . $isbn . '. Silakan bayar pelunasan ' . rupiah($p['tagihan_2']) . '.');
-				pesan('ISBN tersimpan. Buku berstatus Sudah Terbit dan tagihan pelunasan dibuka.');
+				$format = $p['format_terbit'] ?? 'cetak';
+				if ($format === 'keduanya' && !preg_match('/^[0-9Xx-]{10,17}$/', input('eisbn'))) {
+					throw new RuntimeException('Isi juga ISBN e-book (e-ISBN) yang valid.');
+				}
+				if ($p['buku_id'] && $format === 'ebook') {
+					q('UPDATE buku SET eisbn = ? WHERE id = ?', [$isbn, $p['buku_id']]);
+				}
+				if ((int) $p['tagihan_2'] <= 0) {
+					ubah_status($p, 'SELESAI', 'ISBN terbit: ' . $isbn . '. Tidak ada pelunasan; penerbitan selesai.');
+					pesan('ISBN tersimpan. Tidak ada pelunasan, pengajuan selesai. Unggah file e-book di Katalog bila akan dijual.');
+				} else {
+					ubah_status($p, 'MENUNGGU_BAYAR_2', 'ISBN terbit: ' . $isbn . '. Silakan bayar pelunasan ' . rupiah($p['tagihan_2']) . '.');
+					pesan('ISBN tersimpan. Buku berstatus Sudah Terbit dan tagihan pelunasan dibuka.');
+				}
 			} elseif ($aksi === 'selesai' && $s === 'LUNAS') {
 				q('UPDATE pengajuan SET resi = ? WHERE id = ?', [input('resi'), $pid]);
 				ubah_status($p, 'SELESAI', input('resi') ? 'Nomor resi: ' . input('resi') : null);
@@ -198,13 +214,21 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		$data['per_buku_std'] = per_buku_standar();
 		$paket = isset(PAKET[$p['paket'] ?? '']) ? $p['paket'] : 'aksara'; // pengajuan lama (sebelum ada paket) dianggap Paket Aksara
 		$opsi_paket = '';
+		$cocok = paket_untuk_format($p['format_terbit'] ?? 'cetak');
 		foreach ($data['paket'] as $k => $pk) {
-			$opsi_paket .= '<option value="' . $k . '"' . ($k === $paket ? ' selected' : '') . '>' . e($pk['nama'] . ' · ' . rupiah($pk['harga']) . ' · ' . $pk['eks'] . ' eks') . '</option>';
+			if (!in_array($k, $cocok, true) && $k !== $paket) {
+				continue;
+			}
+			$opsi_paket .= '<option value="' . $k . '"' . ($k === $paket ? ' selected' : '') . '>' . e($pk['nama'] . ' · ' . rupiah($pk['harga']) . ' · ' . ($pk['eks'] ? $pk['eks'] . ' eks' : 'tanpa cetak')) . '</option>';
 		}
-		$opsi_paket .= '<option value=""' . ($paket === '' ? ' selected' : '') . '>Tanpa paket (hitung per buku)</option>';
+		if (($p['format_terbit'] ?? 'cetak') !== 'ebook') {
+			$opsi_paket .= '<option value=""' . ($paket === '' ? ' selected' : '') . '>Tanpa paket (hitung per buku)</option>';
+		}
 		$min = $paket ? PAKET[$paket][1] : CETAK_MIN;
 
 		$isi = '<div data-taksiran>
+		<p class="pesan pesan--info" data-blok-digital hidden>Paket Digital: tanpa cetak. Harga paket sudah lunas dengan uang muka, jadi pelunasan Rp0. Setelah ISBN e-book disimpan, pengajuan langsung selesai.</p>
+		<div data-blok-cetak>
 		<h4 class="subjudul-form">1. Spesifikasi cetak</h4><p class="catatan">Sesuai pilihan penulis: <strong>' . e(ringkas_cetak($p)) . '</strong>. Ubah bila disepakati lain dengan penulis.</p>
 		<div class="kolom-2">' . $spek . '<div><label for="gramasi">Berat kertas isi</label><select id="gramasi" name="gramasi" data-gramasi>' . $opsi_gram . '</select></div></div>
 
@@ -228,15 +252,16 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		<p class="catatan">Berat adalah taksiran untuk ongkir: kertas (luas × gramasi), cover, dan kemasan ±100 g per kiriman. Kurir membulatkan ke atas per kg. Buku arsip penerbit tidak dikirim.</p>
 		<p class="pesan pesan--info taksiran__catatan" data-t="catatan"' . ($t['catatan'] ? '' : ' hidden') . '>' . e(implode(' ', $t['catatan'])) . ' Isi harga per buku secara manual atau lengkapi <a href="' . e(url('/admin/harga')) . '">daftar harga</a>.</p>
 
+		</div>
 		<h4 class="subjudul-form">3. Paket, harga, dan tagihan pelunasan</h4>
 		<div class="kolom-2">
 			<div><label for="paket">Paket penerbitan</label><select id="paket" name="paket" data-paket>' . $opsi_paket . '</select></div>
-			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. <span data-min-eks>' . $min . '</span>)</span></label><input type="number" min="' . $min . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . $jumlah . '" data-jumlah></div>
-			<div><label for="harga_per_buku">Harga cetak per buku (Rp) <span class="catatan">(taksiran + margin ' . $margin . '%)</span></label><input id="harga_per_buku" name="harga_per_buku" inputmode="numeric" value="' . ($per_buku ?: '') . '" data-per-buku' . ($p['harga_per_buku'] ? ' data-manual="1"' : '') . '><button type="button" class="tautan-tombol" data-pakai-taksiran>Pakai taksiran</button></div>
-			<div><label for="tagihan_2">Nominal pelunasan (Rp)</label><input id="tagihan_2" name="tagihan_2" inputmode="numeric" required value="' . e($p['tagihan_2'] ?: '') . '" data-tagihan' . ($p['tagihan_2'] ? ' data-manual="1"' : '') . '>
+			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. <span data-min-eks>' . $min . '</span>)</span></label><input type="number" min="' . $min . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . ($paket === 'digital' ? 0 : $jumlah) . '" data-jumlah></div>
+			<div><label for="harga_per_buku">Harga cetak per buku (Rp) <span class="catatan">(taksiran + margin ' . $margin . '%)</span></label><input id="harga_per_buku" name="harga_per_buku" inputmode="numeric" data-rupiah value="' . ($per_buku ?: '') . '" data-per-buku' . ($p['harga_per_buku'] ? ' data-manual="1"' : '') . '><button type="button" class="tautan-tombol" data-pakai-taksiran>Pakai taksiran</button></div>
+			<div><label for="tagihan_2">Nominal pelunasan (Rp)</label><input id="tagihan_2" name="tagihan_2" inputmode="numeric" data-rupiah required value="' . e((string) ($p['tagihan_2'] ?: ($paket === 'digital' ? '0' : ''))) . '" data-tagihan' . ($p['tagihan_2'] ? ' data-manual="1"' : '') . '>
 				<label class="centang" data-hanya-tanpa-paket><input type="checkbox" data-potong> Kurangi biaya awal ' . rupiah($biaya_awal) . '</label></div>
-			<div><label for="rincian_tagihan_2">Rincian untuk penulis</label><input id="rincian_tagihan_2" name="rincian_tagihan_2" placeholder="mis. 5 eks × Rp45.000" value="' . e($p['rincian_tagihan_2']) . '" data-rincian' . ($p['rincian_tagihan_2'] ? ' data-manual="1"' : '') . '></div>
-			<div><label for="harga_cetak">Harga jual di katalog (Rp' . ($buat_buku ? ', opsional' : '') . ')</label><input id="harga_cetak" name="harga_cetak" inputmode="numeric" value="' . e((string) (($buku['harga_cetak'] ?? 0) ?: '')) . '"></div>';
+			<div class="lebar-penuh"><label for="rincian_tagihan_2">Rincian untuk penulis</label><textarea id="rincian_tagihan_2" name="rincian_tagihan_2" rows="2" class="isian-tumbuh" placeholder="mis. 5 eks × Rp45.000" data-rincian' . ($p['rincian_tagihan_2'] ? ' data-manual="1"' : '') . '>' . e($p['rincian_tagihan_2']) . '</textarea></div>
+			<div><label for="harga_cetak">Harga jual di katalog (Rp' . ($buat_buku ? ', opsional' : '') . ')</label><input id="harga_cetak" name="harga_cetak" inputmode="numeric" data-rupiah value="' . e((string) (($buku['harga_cetak'] ?? 0) ?: '')) . '"></div>';
 		if ($buat_buku) {
 			$isi .= '<div><label for="slug">Link halaman buku</label><input id="slug" name="slug" value="' . e(slugify($p['judul'])) . '" pattern="[a-z0-9-]+"><span class="catatan">bookstore.literaindo.com/buku/<em>link</em>/ — tidak boleh diubah setelah dikirim ke Perpusnas</span></div>';
 		}
@@ -251,7 +276,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		</table>
 		<p class="catatan">Selisih spesifikasi muncul bila harga cetak per buku lebih mahal dari buku standar paket (A5, ' . batas_halaman_paket() . ' halaman, HVS hitam putih, soft cover) yaitu ' . rupiah($data['per_buku_std']) . ' per buku. Nominal pelunasan dan rinciannya terisi otomatis. Periksa, ubah bila perlu, lalu simpan untuk mengesahkan.</p></div>
 		<script type="application/json" id="data-harga">' . json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>
-		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=5" defer></script>';
+		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=7" defer></script>';
 		return $form('tagihan', $isi, $buat_buku ? 'Tetapkan Tagihan &amp; Buat Halaman Buku' : 'Perbarui Tagihan');
 	};
 	$catatan_input = fn (string $label, string $id) => '<label for="' . $id . '">' . $label . '</label><textarea id="' . $id . '" name="catatan" rows="3"></textarea>';
@@ -272,7 +297,9 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			. '<details><summary>Minta revisi ke penulis</summary>' . $form('revisi', $catatan_input('Catatan revisi', 'c-revisi'), 'Kirim Permintaan Revisi', 'tombol tombol--kedua') . '</details>',
 		'PERLU_REVISI' => '<p>Menunggu penulis mengirim naskah revisi.</p>',
 		'PROSES_ISBN' => ($buku ? '<p>Link untuk Perpusnas: <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a> · <a href="' . e(url('/admin/buku/' . $buku['id'])) . '">ubah data buku</a></p>' : '')
-			. '<h3>ISBN sudah terbit?</h3>' . $form('isbn', '<div class="kolom-2"><div><label for="isbn">ISBN</label><input id="isbn" name="isbn" required placeholder="978-623-xx-xxxx-x"></div><div><label for="eisbn">e-ISBN (opsional)</label><input id="eisbn" name="eisbn"></div></div>', 'Simpan ISBN &amp; Buka Tagihan Pelunasan')
+			. '<h3>ISBN sudah terbit?</h3>' . $form('isbn', (($p['format_terbit'] ?? 'cetak') === 'ebook'
+				? '<label for="isbn">ISBN e-book</label><input id="isbn" name="isbn" required placeholder="978-623-xx-xxxx-x">'
+				: '<div class="kolom-2"><div><label for="isbn">ISBN buku cetak</label><input id="isbn" name="isbn" required placeholder="978-623-xx-xxxx-x"></div><div><label for="eisbn">ISBN e-book (e-ISBN)' . (($p['format_terbit'] ?? 'cetak') === 'keduanya' ? '' : ' (opsional)') . '</label><input id="eisbn" name="eisbn"' . (($p['format_terbit'] ?? 'cetak') === 'keduanya' ? ' required' : '') . '></div></div>'), 'Simpan ISBN &amp; Buka Tagihan Pelunasan')
 			. '<details><summary>Ubah tagihan</summary>' . $form_tagihan(false) . '</details>',
 		'LUNAS' => '<p>Lunas. Setelah buku dicetak dan dikirim ke penulis, tandai selesai.</p>' . $form('selesai', '<label for="resi">Nomor resi pengiriman (opsional)</label><input id="resi" name="resi">', 'Tandai Selesai'),
 		'SELESAI' => '<p>Selesai.' . ($p['resi'] ? ' Resi: ' . e($p['resi']) : '') . '</p>',
@@ -330,6 +357,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
 			<div><dt>Jenis karya</dt><dd>' . e($jk[0]) . '</dd></div>
+			<div><dt>Jenis ISBN</dt><dd>' . e(FORMAT_TERBIT[$p['format_terbit'] ?? 'cetak'][0] ?? '-') . '</dd></div>
 			<div><dt>Paket</dt><dd>' . e(PAKET[$p['paket']][0] ?? '-') . '</dd></div>
 			' . data_cetak($p) . '
 			<div><dt>Perkiraan halaman</dt><dd>' . e((string) $p['perkiraan_halaman']) . '</dd></div>
@@ -430,7 +458,7 @@ function admin_buku_form(bool $post, string $id = ''): void
 			' . $f('editor', 'Editor') . $f('kategori', 'Kategori') . $f('tahun', 'Tahun terbit') . '
 			<div><label for="status">Status</label><select id="status" name="status"><option value="segera_terbit"' . ($v['status'] === 'segera_terbit' ? ' selected' : '') . '>Segera Terbit (belum bisa dipesan)</option><option value="terbit"' . ($v['status'] === 'terbit' ? ' selected' : '') . '>Sudah Terbit</option></select></div>
 			' . $f('isbn', 'ISBN') . $f('eisbn', 'e-ISBN') . $f('edisi', 'Edisi') . $f('halaman', 'Jumlah halaman') . $f('ukuran', 'Ukuran') . $f('bahasa', 'Bahasa') . '
-			' . $f('harga_cetak', 'Harga cetak (Rp, 0 = tidak dijual)', ' inputmode="numeric"') . $f('harga_ebook', 'Harga e-book (Rp, 0 = tidak dijual)', ' inputmode="numeric"') . '
+			' . $f('harga_cetak', 'Harga cetak (Rp, 0 = tidak dijual)', ' inputmode="numeric" data-rupiah') . $f('harga_ebook', 'Harga e-book (Rp, 0 = tidak dijual)', ' inputmode="numeric" data-rupiah') . '
 		</div>
 		<label for="penulis">Penulis (satu nama per baris)</label><textarea id="penulis" name="penulis" rows="3">' . e($v['penulis']) . '</textarea>
 		<label for="deskripsi">Deskripsi (pisahkan paragraf dengan baris kosong)</label><textarea id="deskripsi" name="deskripsi" rows="8">' . e((string) $v['deskripsi']) . '</textarea>
@@ -527,6 +555,16 @@ function admin_pengaturan(bool $post): void
 			}
 			simpan_pengaturan('batas_halaman_paket', (string) max(1, (int) input('batas_halaman_paket', '200')));
 			simpan_pengaturan('margin_cetak', (string) max(0, min(500, (int) input('margin_cetak', '30'))));
+			foreach (array_keys(IDENTITAS) as $k) {
+				if (!isset($_POST['situs_' . $k])) {
+					continue;
+				}
+				$v = trim(mb_substr(input('situs_' . $k), 0, 500));
+				if ($k === 'email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) {
+					throw new RuntimeException('Alamat email tidak valid.');
+				}
+				simpan_pengaturan('situs_' . $k, $v);
+			}
 			$qris = unggah_sampul_katalog('qris');
 			if ($qris !== '') {
 				simpan_pengaturan('qris_gambar', $qris);
@@ -540,22 +578,28 @@ function admin_pengaturan(bool $post): void
 	$isi = '<section class="panel panel--sempit"><h1>Pengaturan</h1>
 	<form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '
 		<label for="biaya_awal">Biaya awal pengajuan (Rp)</label>
-		<input id="biaya_awal" name="biaya_awal" inputmode="numeric" value="' . e(pengaturan('biaya_awal', '250000')) . '">
+		<input id="biaya_awal" name="biaya_awal" inputmode="numeric" data-rupiah value="' . e(pengaturan('biaya_awal', '250000')) . '">
 		<p class="catatan">Biaya awal menjadi uang muka dan dipotong dari harga paket saat pelunasan.</p>
 		<fieldset><legend>Paket penerbitan</legend>
-			' . implode('', array_map(fn ($pk) => '<label for="' . $pk[3] . '">Harga ' . e($pk[0]) . ' (Rp) <span class="catatan">' . e($pk[5]) . '</span></label><input id="' . $pk[3] . '" name="' . $pk[3] . '" inputmode="numeric" value="' . e(pengaturan($pk[3], (string) $pk[4])) . '">', PAKET)) . '
+			' . implode('', array_map(fn ($pk) => '<label for="' . $pk[3] . '">Harga ' . e($pk[0]) . ' (Rp) <span class="catatan">' . e($pk[5]) . '</span></label><input id="' . $pk[3] . '" name="' . $pk[3] . '" inputmode="numeric" data-rupiah value="' . e(pengaturan($pk[3], (string) $pk[4])) . '">', PAKET)) . '
 			<label for="batas_halaman_paket">Batas halaman buku standar paket</label>
 			<input id="batas_halaman_paket" name="batas_halaman_paket" type="number" min="1" value="' . e((string) batas_halaman_paket()) . '">
 			<label for="margin_cetak">Margin harga cetak per buku (%)</label>
 			<input id="margin_cetak" name="margin_cetak" type="number" min="0" max="500" value="' . e((string) margin_cetak()) . '">
 			<p class="catatan">Harga paket berlaku untuk buku A5, HVS hitam putih, soft cover, sampai batas halaman di atas. Buku yang lebih tebal atau spesifikasinya lain dikenai selisih biaya cetak. Harga cetak per buku = taksiran dari Harga Cetak + margin.</p>
 		</fieldset>
+		<fieldset><legend>Identitas website dan footer</legend>
+			' . implode('', array_map(fn ($k, $d) => '<label for="situs_' . $k . '">' . e($d[0]) . '</label>' . ($d[1] === 'textarea'
+				? '<textarea id="situs_' . $k . '" name="situs_' . $k . '" rows="3">' . e($SITUS[$k]) . '</textarea>'
+				: '<input id="situs_' . $k . '" name="situs_' . $k . '" value="' . e($SITUS[$k]) . '"' . ($k === 'email' ? ' type="email"' : '') . '>'), array_keys(IDENTITAS), IDENTITAS)) . '
+			<p class="catatan">Isi halaman Tentang Kami, Kontak, dan halaman lain diubah di menu <a href="' . e(url('/admin/halaman')) . '">Halaman Website</a>.</p>
+		</fieldset>
 		<label for="qris">Gambar QRIS (unggah untuk mengganti)</label>
 		' . blok_qris() . '
 		<input type="file" id="qris" name="qris" accept=".jpg,.jpeg,.png,.webp">
 		<button type="submit" class="tombol">Simpan</button>
 	</form>
-	<p class="catatan">Nama, alamat, kontak, dan menu website diatur di file <code>app/data/situs.json</code> di GitHub.</p></section>';
+	</section>';
 	tampil('Pengaturan', $isi, ['panel' => menu_admin('/admin/pengaturan')]);
 }
 
@@ -639,7 +683,7 @@ function admin_harga(bool $post): void
 		$id = (int) $r['id'];
 		$baris_kertas .= '<tr><td class="tabel-harga__kode">' . e(kode_kertas($r)) . '</td><td>' . e(label_cetak('jenis_kertas', $r['kertas'])) . '</td><td>' . e($r['sisi']) . ' sisi</td>'
 			. '<td><input class="isian-kecil" name="gramasi[' . $id . ']" inputmode="numeric" value="' . $r['gramasi'] . '" aria-label="Berat kertas ' . e(kode_kertas($r)) . '"> gr</td>'
-			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_kertas($r)) . '"></td>'
+			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" data-rupiah value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_kertas($r)) . '"></td>'
 			. '<td><label class="hapus-baris"><input type="checkbox" name="hapus[' . $id . ']" value="1"> Hapus</label></td></tr>';
 	}
 	$baris_cover = '';
@@ -651,7 +695,7 @@ function admin_harga(bool $post): void
 		}
 		$id = (int) $r['id'];
 		$baris_cover .= '<tr><td class="tabel-harga__kode">' . e(kode_cover($r)) . '</td><td>' . e(label_cetak('jilid', $r['jilid'])) . '</td>'
-			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_cover($r)) . '"></td>'
+			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" data-rupiah value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_cover($r)) . '"></td>'
 			. '<td><label class="hapus-baris"><input type="checkbox" name="hapus[' . $id . ']" value="1"> Hapus</label></td></tr>';
 	}
 	$f = fn (string $aksi) => '<input type="hidden" name="aksi" value="' . $aksi . '">' . csrf_field();
@@ -679,7 +723,7 @@ function admin_harga(bool $post): void
 	<details class="tambah-harga"><summary>Tambah harga kertas</summary>
 		<form method="post" class="formulir formulir--lebar">' . $f('tambah_kertas') . '<div class="baris-tambah">
 			<label>Ukuran ' . $opsi($uk, 'ukuran') . '</label><label>Kertas ' . $opsi($kertas, 'kertas') . '</label><label>Warna ' . $opsi($warna, 'warna') . '</label><label>Sisi ' . $opsi(['1' => '1 sisi', '2' => '2 sisi'], 'sisi') . '</label>
-			<label>Berat (gr) <input name="gramasi" inputmode="numeric" required></label><label>Harga (Rp) <input name="harga" inputmode="numeric" required></label></div>
+			<label>Berat (gr) <input name="gramasi" inputmode="numeric" required></label><label>Harga (Rp) <input name="harga" inputmode="numeric" data-rupiah required></label></div>
 			<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Tambah</button></div><p class="catatan">Jika kombinasinya sudah ada, harganya diperbarui.</p></form>
 	</details>
 
@@ -691,9 +735,141 @@ function admin_harga(bool $post): void
 	<details class="tambah-harga"><summary>Tambah harga cover</summary>
 		<form method="post" class="formulir formulir--lebar">' . $f('tambah_cover') . '<div class="baris-tambah">
 			<label>Ukuran ' . $opsi($uk, 'ukuran') . '</label><label>Cover ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['jenis_sampul'][1]), 'sampul') . '</label><label>Jilid ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['jilid'][1]), 'jilid') . '</label><label>Lapisan ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['laminasi'][1]), 'laminasi') . '</label>
-			<label>Harga (Rp) <input name="harga" inputmode="numeric" required></label></div>
+			<label>Harga (Rp) <input name="harga" inputmode="numeric" data-rupiah required></label></div>
 			<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Tambah</button></div><p class="catatan">Contoh: tambahkan harga untuk jilid staples bila Anda menyediakannya.</p></form>
 	</details>
 	</section>';
 	tampil('Harga Cetak', $isi, ['panel' => menu_admin('/admin/harga')]);
+}
+
+
+// ---------- Halaman website (Tentang Kami, Kontak, dst.) ----------
+
+/** Halaman konten yang bisa diubah admin: slug => judul. */
+function daftar_halaman_konten(): array
+{
+	$out = [];
+	foreach (glob(APP_DIR . '/konten/*.html') ?: [] as $f) {
+		preg_match('/<!--\s*judul:\s*(.+?)\s*-->/', (string) file_get_contents($f), $m);
+		$out[basename($f, '.html')] = $m[1] ?? basename($f, '.html');
+	}
+	return $out;
+}
+
+/** Isi bawaan halaman dari file (tanpa baris judul). */
+function isi_bawaan_halaman(string $slug): string
+{
+	return trim((string) preg_replace('/<!--\s*judul:.*?-->\s*/', '', (string) file_get_contents(APP_DIR . '/konten/' . $slug . '.html')));
+}
+
+/** Bersihkan HTML dari penyunting: hanya tag dan atribut aman yang disimpan. */
+function bersihkan_html(string $html): string
+{
+	$izin = ['p', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'u', 'a', 'br', 'span', 'div', 'blockquote'];
+	$buang = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'link', 'meta'];
+	// Lindungi {{penanda}} agar tidak di-encode di href.
+	$html = (string) preg_replace('/\{\{(\w+)\}\}/', 'PENANDA__$1__PENANDA', $html);
+	$dok = new DOMDocument();
+	libxml_use_internal_errors(true);
+	$dok->loadHTML('<?xml encoding="utf-8"?><div id="akar">' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+	libxml_clear_errors();
+	$akar = $dok->getElementById('akar');
+	if (!$akar) {
+		return '';
+	}
+	$jalan = function (DOMNode $n) use (&$jalan, $izin, $buang) {
+		foreach (iterator_to_array($n->childNodes) as $c) {
+			if ($c instanceof DOMComment) {
+				$n->removeChild($c);
+				continue;
+			}
+			if (!$c instanceof DOMElement) {
+				continue;
+			}
+			$tag = strtolower($c->tagName);
+			if (in_array($tag, $buang, true)) {
+				$n->removeChild($c);
+				continue;
+			}
+			$jalan($c);
+			if (!in_array($tag, $izin, true)) {
+				while ($c->firstChild) {
+					$n->insertBefore($c->firstChild, $c);
+				}
+				$n->removeChild($c);
+				continue;
+			}
+			foreach (iterator_to_array($c->attributes) as $a) {
+				$nama = strtolower($a->name);
+				$ok = $nama === 'class' || ($tag === 'a' && $nama === 'href' && preg_match('#^(https?://|mailto:|tel:|/|\#|PENANDA__)#i', trim($a->value)));
+				if (!$ok) {
+					$c->removeAttribute($a->name);
+				}
+			}
+			if ($tag === 'a' && preg_match('#^https?://#i', (string) $c->getAttribute('href'))) {
+				$c->setAttribute('rel', 'noopener');
+			}
+		}
+	};
+	$jalan($akar);
+	$out = '';
+	foreach ($akar->childNodes as $c) {
+		$out .= $dok->saveHTML($c);
+	}
+	return trim((string) preg_replace('/PENANDA__(\w+?)__PENANDA/', '{{$1}}', $out));
+}
+
+function admin_halaman(bool $post): void
+{
+	wajib_masuk('admin');
+	$baris = '';
+	foreach (daftar_halaman_konten() as $slug => $judul) {
+		$ubah = pengaturan('konten_' . $slug) !== '';
+		$baris .= '<tr><td><strong>' . e($judul) . '</strong><br><span class="catatan">/' . e($slug) . '/</span></td><td>' . ($ubah ? '<span class="lencana lencana--proses">Sudah diubah</span>' : '<span class="catatan">Teks bawaan</span>') . '</td>'
+			. '<td style="text-align:right;white-space:nowrap"><a class="tombol tombol--kecil" href="' . e(url('/admin/halaman/' . $slug)) . '">Ubah</a> <a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/' . $slug . '/')) . '" target="_blank">Lihat</a></td></tr>';
+	}
+	$isi = '<section class="panel"><h1>Halaman Website</h1>
+	<p>Ubah isi halaman yang tampil di menu dan footer website. Tulisan di bawah logo, alamat, dan kontak di footer diubah di <a href="' . e(url('/admin/pengaturan')) . '">Pengaturan</a>.</p>
+	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Halaman</th><th>Status</th><th></th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
+	tampil('Halaman Website', $isi, ['panel' => menu_admin('/admin/halaman')]);
+}
+
+function admin_halaman_ubah(bool $post, string $slug): void
+{
+	wajib_masuk('admin');
+	$daftar = daftar_halaman_konten();
+	if (!isset($daftar[$slug])) {
+		tidak_ditemukan();
+	}
+	if ($post) {
+		if (input('aksi') === 'bawaan') {
+			simpan_pengaturan('konten_' . $slug, '');
+			pesan('Halaman dikembalikan ke teks bawaan.');
+		} else {
+			$html = bersihkan_html((string) ($_POST['isi'] ?? ''));
+			if (trim(strip_tags($html)) === '') {
+				pesan('Isi halaman tidak boleh kosong.', 'galat');
+				arahkan('/admin/halaman/' . $slug);
+			}
+			simpan_pengaturan('konten_' . $slug, $html);
+			pesan('Halaman ' . $daftar[$slug] . ' tersimpan.');
+		}
+		arahkan('/admin/halaman/' . $slug);
+	}
+	$isi_sekarang = pengaturan('konten_' . $slug);
+	$ubah = $isi_sekarang !== '';
+	$html = $ubah ? $isi_sekarang : isi_bawaan_halaman($slug);
+	$tombol = [['p', 'Paragraf'], ['h2', 'Judul'], ['h3', 'Subjudul'], ['bold', '<strong>B</strong>'], ['italic', '<em>I</em>'], ['ul', '• Daftar'], ['ol', '1. Daftar'], ['link', 'Tautan'], ['unlink', 'Hapus tautan'], ['hapus', 'Hapus format']];
+	$isi = '<section class="panel"><p><a href="' . e(url('/admin/halaman')) . '">' . ikon('kembali') . ' Halaman Website</a></p>
+	<div class="judul-baris"><h1>' . e($daftar[$slug]) . '</h1><a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/' . $slug . '/')) . '" target="_blank">Lihat halaman</a></div>
+	<p class="catatan">Ketik langsung di kotak di bawah, seperti di Word. Tulisan dalam kurung kurawal, misalnya <code>{{alamat}}</code> atau <code>{{paket}}</code>, otomatis diganti data dari Pengaturan atau kartu paket. Biarkan saja bila ingin tetap tampil.</p>
+	<form method="post" class="formulir penyunting" data-penyunting>' . csrf_field() . '
+		<div class="penyunting__alat" role="toolbar" aria-label="Format teks">' . implode('', array_map(fn ($t) => '<button type="button" class="tombol tombol--kedua tombol--kecil" data-perintah="' . $t[0] . '">' . $t[1] . '</button>', $tombol)) . '</div>
+		<div class="penyunting__isi konten" contenteditable="true" data-isi aria-label="Isi halaman">' . $html . '</div>
+		<textarea name="isi" hidden data-keluaran>' . e($html) . '</textarea>
+		<div class="aksi-baris"><button type="submit" class="tombol">Simpan Halaman</button></div>
+	</form>'
+	. ($ubah ? '<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="bawaan"><details><summary>Kembalikan ke teks bawaan</summary><p>Perubahan Anda di halaman ini akan dihapus.</p><button type="submit" class="tombol tombol--bahaya tombol--kecil">Kembalikan</button></details></form>' : '')
+	. '</section><script src="' . e(url('/assets/js/penyunting.js')) . '?v=1" defer></script>';
+	tampil('Ubah ' . $daftar[$slug], $isi, ['panel' => menu_admin('/admin/halaman')]);
 }

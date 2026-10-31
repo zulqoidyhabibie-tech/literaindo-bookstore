@@ -31,6 +31,7 @@ if (!config()) {
 	exit;
 }
 pastikan_skema();
+terapkan_identitas();
 if ($post) {
 	cek_csrf();
 }
@@ -64,6 +65,8 @@ $rute = [
 	'#^/admin$#'                            => 'admin_dasbor',
 	'#^/admin/pengajuan$#'                  => 'admin_pengajuan',
 	'#^/admin/pengajuan/(\d+)$#'            => 'admin_pengajuan_detail',
+	'#^/admin/halaman$#'                    => 'admin_halaman',
+	'#^/admin/halaman/([a-z-]+)$#'          => 'admin_halaman_ubah',
 	'#^/admin/buku$#'                       => 'admin_buku',
 	'#^/admin/buku/baru$#'                  => 'admin_buku_form',
 	'#^/admin/buku/(\d+)$#'                 => 'admin_buku_form',

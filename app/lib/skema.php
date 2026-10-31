@@ -62,7 +62,7 @@ function skema_pesanan(string $driver): string
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 8) {
+	if ($versi >= 9) {
 		return;
 	}
 	if ($versi < 2) {
@@ -105,7 +105,13 @@ function pastikan_skema(): void
 	} catch (PDOException) {
 		db()->exec("ALTER TABLE buku ADD COLUMN ebook_path VARCHAR(255) NOT NULL DEFAULT ''");
 	}
-	simpan_pengaturan('versi_skema', '8');
+	// v9: jenis ISBN yang diajukan (cetak / e-book / keduanya)
+	try {
+		db()->query('SELECT format_terbit FROM pengajuan LIMIT 1');
+	} catch (PDOException) {
+		db()->exec("ALTER TABLE pengajuan ADD COLUMN format_terbit VARCHAR(10) NOT NULL DEFAULT 'cetak'");
+	}
+	simpan_pengaturan('versi_skema', '9');
 }
 
 function skema(string $driver): array
@@ -168,6 +174,7 @@ function skema(string $driver): array
 			jenis_sampul VARCHAR(20) NOT NULL DEFAULT '',
 			jilid VARCHAR(20) NOT NULL DEFAULT '',
 			paket VARCHAR(20) NOT NULL DEFAULT '',
+			format_terbit VARCHAR(10) NOT NULL DEFAULT 'cetak',
 			gramasi INT NOT NULL DEFAULT 0,
 			halaman_cetak INT NOT NULL DEFAULT 0,
 			harga_per_buku INT NOT NULL DEFAULT 0,

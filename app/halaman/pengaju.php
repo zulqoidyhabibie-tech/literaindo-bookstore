@@ -68,7 +68,10 @@ function pengaju_ubah(bool $post, string $id): void
 function formulir_pengajuan(array $u, ?array $p, bool $post): void
 {
 	$revisi = $p && $p['status'] === 'PERLU_REVISI';
-	$v = $p ?: ['judul' => '', 'subjudul' => '', 'penulis' => $u['nama'], 'kategori' => '', 'sinopsis' => '', 'perkiraan_halaman' => '', 'jumlah_cetak_diminta' => PAKET['aksara'][1], 'jenis_karya' => 'asli', 'paket' => 'aksara'] + cetak_bawaan();
+	$v = $p ?: ['judul' => '', 'subjudul' => '', 'penulis' => $u['nama'], 'kategori' => '', 'sinopsis' => '', 'perkiraan_halaman' => '', 'jumlah_cetak_diminta' => PAKET['aksara'][1], 'jenis_karya' => 'asli', 'paket' => 'aksara', 'format_terbit' => 'cetak'] + cetak_bawaan();
+	if ($p && !isset(FORMAT_TERBIT[$p['format_terbit'] ?? ''])) {
+		$v['format_terbit'] = 'cetak';
+	}
 	if ($p && !isset(PAKET[$p['paket'] ?? ''])) {
 		$v['paket'] = 'aksara';
 	}
@@ -93,7 +96,14 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 		foreach (PILIHAN_CETAK as $k => [, $opsi]) {
 			$v[$k] = isset($opsi[input($k)]) ? input($k) : array_key_first($opsi);
 		}
+		$v['format_terbit'] = isset(FORMAT_TERBIT[input('format_terbit')]) ? input('format_terbit') : 'cetak';
 		$v['paket'] = isset(PAKET[input('paket')]) ? input('paket') : 'aksara';
+		if (!in_array($v['paket'], paket_untuk_format($v['format_terbit']), true)) {
+			$v['paket'] = paket_untuk_format($v['format_terbit'])[0];
+		}
+		if ($v['format_terbit'] === 'ebook') {
+			$v['jumlah_cetak_diminta'] = 0;
+		}
 		$kirim = ($_POST['aksi'] ?? '') === 'kirim';
 		if (mb_strlen($v['judul']) < 3) {
 			$galat[] = 'Isi judul buku.';
@@ -114,7 +124,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 		}
 
 		if (!$galat) {
-			$kolom_cetak = array_merge(['paket'], array_keys(PILIHAN_CETAK));
+			$kolom_cetak = array_merge(['paket', 'format_terbit'], array_keys(PILIHAN_CETAK));
 			$nilai_cetak = array_map(fn ($k) => $v[$k], $kolom_cetak);
 			db()->beginTransaction();
 			try {
@@ -196,7 +206,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 		$pilihan_cetak .= pilih_kartu($k, $judul, $opsi, (string) $v[$k]);
 	}
 	$kategori = array_column(semua("SELECT DISTINCT kategori FROM buku WHERE kategori <> '' ORDER BY kategori"), 'kategori');
-	$daftar_kategori = implode('', array_map(fn ($k) => '<option value="' . e($k) . '">', array_unique(array_merge($kategori, ['Pendidikan', 'Metodologi Penelitian', 'Matematika dan Statistika', 'Pendidikan Digital', 'Sosial dan Humaniora', 'Agama', 'Kesehatan', 'Ekonomi dan Manajemen']))));
+	$daftar_kategori = implode('', array_map(fn ($k) => '<option value="' . e($k) . '">', array_unique(array_merge($kategori, ['Pendidikan', 'Metodologi Penelitian', 'Matematika dan Statistika', 'Pendidikan Digital', 'Sosial dan Humaniora', 'Agama', 'Kesehatan', 'Ekonomi dan Manajemen', 'Fiksi', 'Nonfiksi Umum', 'Anak dan Remaja', 'Bahasa dan Sastra', 'Teknologi']))));
 	$daftar_galat = $galat ? '<ul class="pesan pesan--galat" role="alert">' . implode('', array_map(fn ($g) => '<li>' . e($g) . '</li>', $galat)) . '</ul>' : '';
 	$judul = $revisi ? 'Kirim Naskah Revisi' : ($p ? 'Lengkapi Pengajuan' : 'Ajukan Buku Baru');
 
@@ -205,6 +215,10 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 	' . ($revisi ? '<p class="pesan pesan--info">Perbaiki data bila perlu, lalu unggah <strong>naskah hasil revisi</strong> dan tekan Kirim Revisi.</p>' : '<p class="catatan">Isi data buku dan unggah berkasnya. Anda bisa menyimpan draf dan melanjutkannya nanti. Setelah dikirim, Anda akan diminta membayar biaya awal ' . rupiah(pengaturan('biaya_awal', '250000')) . '.</p>') . '
 	' . $daftar_galat . '
 	<form method="post" enctype="multipart/form-data" class="formulir formulir--lebar">' . csrf_field() . '
+		<fieldset><legend>Jenis ISBN yang diajukan *</legend>
+			<p class="catatan">Perpustakaan Nasional memberi ISBN terpisah untuk buku cetak dan e-book.</p>
+			<div class="pilih-format-terbit">' . implode('', array_map(fn ($k, $f) => '<label class="pilih-format"><input type="radio" name="format_terbit" value="' . $k . '"' . ($k === $v['format_terbit'] ? ' checked' : '') . ' data-format-terbit> <span><strong>' . e($f[0]) . '</strong><br><span class="catatan">' . e($f[1]) . '</span></span></label>', array_keys(FORMAT_TERBIT), FORMAT_TERBIT)) . '</div>
+		</fieldset>
 		<fieldset><legend>Paket penerbitan</legend>
 			<p class="catatan">Kami hanya menerima <strong>naskah siap terbit</strong>: isi sudah disunting dan di-layout, dan sampul sudah didesain. Kami tidak menyediakan jasa penyuntingan, tata letak, atau desain.</p>
 			' . kartu_paket('paket', $v['paket']) . '
@@ -224,7 +238,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			<label for="sinopsis">Sinopsis / deskripsi buku *</label>
 			<textarea id="sinopsis" name="sinopsis" rows="6">' . e($v['sinopsis']) . '</textarea>
 		</fieldset>
-		<fieldset><legend>Spesifikasi cetak</legend>
+		<fieldset data-hanya-cetak><legend>Spesifikasi cetak</legend>
 			<p class="catatan">Pilih spesifikasi buku cetak Anda. Gambar di setiap pilihan adalah ilustrasi untuk membantu membedakannya. Biaya pelunasan dihitung redaksi berdasarkan pilihan ini dan jumlah eksemplar.</p>
 			' . $pilihan_cetak . '
 			<label for="jumlah_cetak_diminta">Jumlah eksemplar dicetak * <span class="catatan">(minimal sesuai paket: <span data-min-eks>' . PAKET[$v['paket']][1] . '</span>)</span></label>
@@ -260,7 +274,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 		</div>
 	</form>
 </section>';
-	$isi .= '<script>document.querySelectorAll("input[name=paket]").forEach(function(r){r.addEventListener("change",function(){var j=document.getElementById("jumlah_cetak_diminta"),m=parseInt(r.dataset.eks,10);j.min=m;if((parseInt(j.value,10)||0)<m)j.value=m;document.querySelectorAll("[data-min-eks]").forEach(function(s){s.textContent=m;});});});</script>';
+	$isi .= '<script>(function(){var j=document.getElementById("jumlah_cetak_diminta");function pk(r){var m=parseInt(r.dataset.eks,10);j.min=m;if(m&&(parseInt(j.value,10)||0)<m)j.value=m;document.querySelectorAll("[data-min-eks]").forEach(function(s){s.textContent=m;});}document.querySelectorAll("input[name=paket]").forEach(function(r){r.addEventListener("change",function(){pk(r);});});function fmt(){var c=document.querySelector("[data-format-terbit]:checked"),eb=c&&c.value==="ebook";document.querySelectorAll("[data-untuk-ebook]").forEach(function(l){l.hidden=!eb;});document.querySelectorAll("[data-untuk-cetak]").forEach(function(l){l.hidden=eb;});document.querySelectorAll("[data-hanya-cetak]").forEach(function(d){d.hidden=eb;});var pilih=document.querySelector("input[name=paket]:checked");if(!pilih||pilih.closest("label").hidden){var r=document.querySelector((eb?"[data-untuk-ebook]":"[data-untuk-cetak]")+" input[name=paket]");if(r){r.checked=true;pk(r);}}if(eb)j.value=0;}document.querySelectorAll("[data-format-terbit]").forEach(function(r){r.addEventListener("change",fmt);});fmt();})();</script>';
 	$isi .= '<script>document.querySelectorAll("[data-jenis-karya]").forEach(function(s){function f(){document.querySelectorAll(".berkas-tambahan").forEach(function(d){d.hidden=d.dataset.untuk!==s.value;});}s.addEventListener("change",f);f();});</script>';
 	tampil($judul, $isi, ['panel' => menu_pengaju($p ? '' : '/akun/pengajuan/baru')]);
 }
@@ -401,9 +415,10 @@ function pengaju_detail(bool $post, string $id): void
 		<section><h2>Data buku</h2><dl class="data-ringkas">
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
+			<div><dt>Jenis ISBN</dt><dd>' . e(FORMAT_TERBIT[$p['format_terbit'] ?? 'cetak'][0] ?? '-') . '</dd></div>
 			<div><dt>Paket</dt><dd>' . e(PAKET[$p['paket']][0] ?? '-') . '</dd></div>
 			' . data_cetak($p) . '
-			<div><dt>Jumlah cetak</dt><dd>' . e((string) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta'])) . ' eksemplar</dd></div>' . $isbn . '
+			<div><dt>Jumlah cetak</dt><dd>' . (($p['format_terbit'] ?? 'cetak') === 'ebook' ? 'Tanpa cetak (e-book)' : e((string) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta'])) . ' eksemplar') . '</dd></div>' . $isbn . '
 		</dl>
 		<h2>Berkas</h2>' . daftar_berkas($pid) . '</section>
 		<section><h2>Riwayat &amp; pesan</h2>' . form_catatan() . riwayat($pid) . '</section>
