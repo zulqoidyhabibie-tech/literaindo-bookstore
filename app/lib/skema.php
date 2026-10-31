@@ -21,11 +21,20 @@ function skema_notifikasi(string $driver): string
 /** Tambahkan tabel baru pada database yang dipasang dengan versi lama. */
 function pastikan_skema(): void
 {
-	if ((int) pengaturan('versi_skema', '1') >= 2) {
+	$versi = (int) pengaturan('versi_skema', '1');
+	if ($versi >= 3) {
 		return;
 	}
-	db()->exec(skema_notifikasi(config()['db']['driver'] ?? 'mysql'));
-	simpan_pengaturan('versi_skema', '2');
+	if ($versi < 2) {
+		db()->exec(skema_notifikasi(config()['db']['driver'] ?? 'mysql'));
+	}
+	// v3: kolom jenis karya (asli/terjemahan/dialihkan/milik umum)
+	try {
+		db()->query('SELECT jenis_karya FROM pengajuan LIMIT 1');
+	} catch (PDOException) {
+		db()->exec("ALTER TABLE pengajuan ADD COLUMN jenis_karya VARCHAR(20) NOT NULL DEFAULT 'asli'");
+	}
+	simpan_pengaturan('versi_skema', '3');
 }
 
 function skema(string $driver): array
@@ -80,6 +89,7 @@ function skema(string $driver): array
 			perkiraan_halaman INT NOT NULL DEFAULT 0,
 			ukuran VARCHAR(60) NOT NULL DEFAULT '',
 			jumlah_cetak_diminta INT NOT NULL DEFAULT 0,
+			jenis_karya VARCHAR(20) NOT NULL DEFAULT 'asli',
 			jumlah_cetak INT NOT NULL DEFAULT 0,
 			halaman_final VARCHAR(40) NOT NULL DEFAULT '',
 			tagihan_2 INT NOT NULL DEFAULT 0,

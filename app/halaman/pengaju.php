@@ -69,7 +69,7 @@ function pengaju_ubah(bool $post, string $id): void
 function formulir_pengajuan(array $u, ?array $p, bool $post): void
 {
 	$revisi = $p && $p['status'] === 'PERLU_REVISI';
-	$v = $p ?: ['judul' => '', 'subjudul' => '', 'penulis' => $u['nama'], 'kategori' => '', 'sinopsis' => '', 'perkiraan_halaman' => '', 'ukuran' => UKURAN_BUKU[0], 'jumlah_cetak_diminta' => ''];
+	$v = $p ?: ['judul' => '', 'subjudul' => '', 'penulis' => $u['nama'], 'kategori' => '', 'sinopsis' => '', 'perkiraan_halaman' => '', 'ukuran' => UKURAN_BUKU[0], 'jumlah_cetak_diminta' => '', 'jenis_karya' => 'asli'];
 	$galat = [];
 
 	if ($post) {
@@ -82,6 +82,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			'perkiraan_halaman' => (int) input('perkiraan_halaman'),
 			'ukuran' => in_array(input('ukuran'), UKURAN_BUKU, true) ? input('ukuran') : UKURAN_BUKU[0],
 			'jumlah_cetak_diminta' => max(0, (int) input('jumlah_cetak_diminta')),
+			'jenis_karya' => isset(JENIS_KARYA[input('jenis_karya')]) ? input('jenis_karya') : 'asli',
 		]);
 		$kirim = ($_POST['aksi'] ?? '') === 'kirim';
 		if (mb_strlen($v['judul']) < 3) {
@@ -102,18 +103,22 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			db()->beginTransaction();
 			try {
 				if ($p) {
-					q('UPDATE pengajuan SET judul=?, subjudul=?, penulis=?, kategori=?, sinopsis=?, perkiraan_halaman=?, ukuran=?, jumlah_cetak_diminta=?, diubah=? WHERE id=?',
-						[$v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['jumlah_cetak_diminta'], sekarang(), $p['id']]);
+					q('UPDATE pengajuan SET judul=?, subjudul=?, penulis=?, kategori=?, sinopsis=?, perkiraan_halaman=?, ukuran=?, jumlah_cetak_diminta=?, jenis_karya=?, diubah=? WHERE id=?',
+						[$v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['jumlah_cetak_diminta'], $v['jenis_karya'], sekarang(), $p['id']]);
 					$id = (int) $p['id'];
 				} else {
-					q('INSERT INTO pengajuan (pengguna_id, judul, subjudul, penulis, kategori, sinopsis, perkiraan_halaman, ukuran, jumlah_cetak_diminta, status, dibuat, diubah) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-						[$u['id'], $v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['jumlah_cetak_diminta'], 'DRAF', sekarang(), sekarang()]);
+					q('INSERT INTO pengajuan (pengguna_id, judul, subjudul, penulis, kategori, sinopsis, perkiraan_halaman, ukuran, jumlah_cetak_diminta, jenis_karya, status, dibuat, diubah) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+						[$u['id'], $v['judul'], $v['subjudul'], $v['penulis'], $v['kategori'], $v['sinopsis'], $v['perkiraan_halaman'], $v['ukuran'], $v['jumlah_cetak_diminta'], $v['jenis_karya'], 'DRAF', sekarang(), sekarang()]);
 					$id = (int) db()->lastInsertId();
 					catat($id, (int) $u['id'], 'Pengajuan dibuat.', true);
 				}
 				$baru_naskah = simpan_unggahan('naskah', 'naskah', $id);
 				simpan_unggahan('pernyataan', 'pernyataan', $id);
 				simpan_unggahan('sampul', 'sampul', $id);
+				$tambahan = JENIS_KARYA[$v['jenis_karya']][1];
+				if ($tambahan) {
+					simpan_unggahan($tambahan, $tambahan, $id);
+				}
 				db()->commit();
 			} catch (RuntimeException $ex) {
 				db()->rollBack();
@@ -130,6 +135,10 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			if (!berkas_terakhir($id, 'pernyataan')) {
 				$galat[] = 'Unggah surat pernyataan keaslian sebelum mengirim.';
 			}
+			$tambahan = JENIS_KARYA[$v['jenis_karya']][1];
+			if ($tambahan && !berkas_terakhir($id, $tambahan)) {
+				$galat[] = 'Unggah ' . mb_strtolower(JENIS_BERKAS[$tambahan][0]) . ' (wajib untuk ' . mb_strtolower(JENIS_KARYA[$v['jenis_karya']][0]) . ').';
+			}
 			if ($revisi && empty($baru_naskah)) {
 				$galat[] = 'Unggah naskah hasil revisi sebelum mengirim ulang.';
 			}
@@ -143,7 +152,13 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 				}
 				arahkan('/akun/pengajuan/' . $id);
 			}
-			$p = satu('SELECT * FROM pengajuan WHERE id = ?', [$id]);
+			// Data & berkas sudah tersimpan sebagai draf: lanjutkan di halaman ubah
+			// agar pengiriman ulang tidak membuat pengajuan ganda.
+			foreach ($galat as $g) {
+				pesan($g, 'galat');
+			}
+			pesan('Data sudah tersimpan sebagai draf. Lengkapi kekurangannya lalu kirim lagi.', 'info');
+			arahkan('/akun/pengajuan/' . $id . '/ubah');
 		} elseif (!$galat) {
 			pesan('Draf tersimpan.');
 			arahkan('/akun/pengajuan/' . $id . '/ubah');
@@ -152,7 +167,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 
 	$berkas_ada = '';
 	if ($p) {
-		foreach (['naskah', 'pernyataan', 'sampul'] as $j) {
+		foreach (['naskah', 'pernyataan', 'sampul', 'izin_terjemah', 'pengalihan', 'keterangan_pd'] as $j) {
 			$b = berkas_terakhir((int) $p['id'], $j);
 			$berkas_ada .= $b ? '<p class="berkas-ada">' . e(JENIS_BERKAS[$j][0]) . ' tersimpan: <a href="' . e(url('/berkas/' . $b['id'])) . '">' . e($b['nama_asli']) . '</a></p>' : '';
 		}
@@ -194,6 +209,9 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			<label for="pernyataan">Surat pernyataan keaslian naskah * <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label>
 			<p class="contoh-unduh">' . ikon('unduh') . '<span>Belum punya suratnya? Unduh contoh: <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.docx')) . '" download>Word (bisa diisi)</a> · <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.pdf')) . '" download>PDF (untuk dicetak)</a>. Format resmi Perpusnas. Isi data Anda, tanda tangani kolom <strong>Penulis</strong> di atas meterai Rp10.000 (setiap penulis menandatangani), lalu pindai/foto dan unggah di sini. Kolom Penanggung jawab Penerbit akan ditandatangani oleh Literaindo Press.</span></p>
 			<input type="file" id="pernyataan" name="pernyataan" accept=".pdf,.jpg,.jpeg,.png">
+			<label for="jenis_karya">Jenis karya *</label>
+			<select id="jenis_karya" name="jenis_karya" data-jenis-karya>' . implode('', array_map(fn ($k, $j) => '<option value="' . $k . '"' . ($k === $v['jenis_karya'] ? ' selected' : '') . '>' . e($j[0]) . '</option>', array_keys(JENIS_KARYA), JENIS_KARYA)) . '</select>
+			' . implode('', array_map(fn ($k, $j) => $j[1] ? '<div class="berkas-tambahan" data-untuk="' . $k . '"' . ($k === $v['jenis_karya'] ? '' : ' hidden') . '><label for="' . $j[1] . '">' . e(JENIS_BERKAS[$j[1]][0]) . ' * <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label><p class="catatan">' . e($j[2]) . '</p><input type="file" id="' . $j[1] . '" name="' . $j[1] . '" accept=".pdf,.jpg,.jpeg,.png"></div>' : '', array_keys(JENIS_KARYA), JENIS_KARYA)) . '
 			<label for="sampul">Desain sampul <span class="catatan">(opsional, JPG/PNG/WebP, maks. 10 MB)</span></label>
 			<input type="file" id="sampul" name="sampul" accept=".jpg,.jpeg,.png,.webp">
 		</fieldset>
@@ -203,6 +221,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 		</div>
 	</form>
 </section>';
+	$isi .= '<script>document.querySelectorAll("[data-jenis-karya]").forEach(function(s){function f(){document.querySelectorAll(".berkas-tambahan").forEach(function(d){d.hidden=d.dataset.untuk!==s.value;});}s.addEventListener("change",f);f();});</script>';
 	tampil($judul, $isi, ['panel' => menu_pengaju($p ? '' : '/akun/pengajuan/baru')]);
 }
 
