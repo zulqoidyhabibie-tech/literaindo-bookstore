@@ -641,6 +641,78 @@ main {
 	margin-left: 0.75rem;
 }
 
+.navigasi__lonceng {
+	position: relative;
+	display: inline-flex;
+	padding: 0.5rem;
+	margin-left: 0.5rem;
+	color: #fff;
+}
+
+.navigasi__lonceng .ikon {
+	width: 1.35em;
+	height: 1.35em;
+}
+
+.lonceng__angka {
+	position: absolute;
+	top: 0.1rem;
+	right: -0.1rem;
+	min-width: 1.25rem;
+	height: 1.25rem;
+	padding: 0 0.3rem;
+	border-radius: 999px;
+	background: var(--aksen);
+	color: var(--tinta);
+	font-size: 0.72rem;
+	font-weight: 700;
+	line-height: 1.25rem;
+	text-align: center;
+	box-shadow: 0 0 0 2px var(--warna-utama);
+}
+
+.lonceng__angka[hidden] {
+	display: none;
+}
+
+.navigasi__lonceng + .navigasi__cari {
+	margin-left: 0.5rem;
+}
+
+.daftar-notif {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border-top: 1px solid var(--garis);
+}
+
+.notif a {
+	display: grid;
+	gap: 0.15rem;
+	padding: 0.85rem 1rem;
+	border-bottom: 1px solid var(--garis);
+	color: var(--teks);
+	text-decoration: none;
+}
+
+.notif a:hover {
+	background: #f6f6f6;
+}
+
+.notif--baru a {
+	background: #fffaf0;
+	border-left: 4px solid var(--aksen);
+}
+
+.notif--baru .notif__pesan {
+	font-weight: 600;
+}
+
+.notif__waktu {
+	font-size: 0.82rem;
+	color: var(--redup);
+}
+
 .panel-menu {
 	margin: 1rem 0;
 }

@@ -138,7 +138,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 					ubah_status($p, 'DITINJAU', 'Naskah revisi dikirim.');
 					pesan('Naskah revisi terkirim. Redaksi akan meninjaunya kembali.');
 				} else {
-					ubah_status($p, 'MENUNGGU_BAYAR_1');
+					ubah_status($p, 'MENUNGGU_BAYAR_1', 'Pengajuan baru dikirim.');
 					pesan('Pengajuan terkirim. Langkah berikutnya: bayar biaya awal.');
 				}
 				arahkan('/akun/pengajuan/' . $id);
@@ -277,6 +277,7 @@ function pengaju_detail(bool $post, string $id): void
 		$aksi = $_POST['aksi'] ?? '';
 		if ($aksi === 'catatan' && input('isi') !== '') {
 			catat($pid, (int) $u['id'], mb_substr(input('isi'), 0, 3000));
+			notif_pengajuan($p, 'Pesan baru: ' . mb_substr(input('isi'), 0, 200));
 			q('UPDATE pengajuan SET diubah = ? WHERE id = ?', [sekarang(), $pid]);
 			pesan('Pesan terkirim ke admin.');
 		} elseif ($aksi === 'bukti' && in_array($p['status'], ['MENUNGGU_BAYAR_1', 'MENUNGGU_BAYAR_2'], true)) {

@@ -21,6 +21,7 @@ const IKON = [
 	'kembali'   => '<path d="m11 6-6 6 6 6M5 12h14"/>',
 	'wa'        => '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9 9c0 3 3 6 6 6l1-1.5-2-1-1 1c-1-.5-2-1.5-2.5-2.5l1-1-1-2z"/>',
 	'akun'      => '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+	'lonceng'   => '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
 	'unduh'     => '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
 ];
 
@@ -56,6 +57,12 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 		? '<a class="navigasi__akun" href="' . e(url($u['peran'] === 'admin' ? '/admin' : '/akun')) . '">' . ikon('akun') . '<span>' . e($u['peran'] === 'admin' ? 'Panel Admin' : 'Akun Saya') . '</span></a>'
 		: '<a class="navigasi__akun" href="' . e(url('/masuk')) . '">' . ikon('akun') . '<span>Masuk</span></a>';
 
+	if ($u) {
+		$n = jumlah_notif((int) $u['id']);
+		$akun .= '<a class="navigasi__lonceng" href="' . e(url('/notifikasi')) . '" aria-label="Notifikasi' . ($n ? ", $n belum dibaca" : '') . '" title="Notifikasi" data-jumlah-url="' . e(url('/notifikasi/jumlah')) . '">' . ikon('lonceng')
+			. '<span class="lonceng__angka"' . ($n ? '' : ' hidden') . '>' . ($n > 99 ? '99+' : $n) . '</span></a>';
+	}
+
 	$tautan = '';
 	foreach ($SITUS['tautan_terkait'] as $t) {
 		$href = str_starts_with($t['url'], '/') ? url($t['url']) : $t['url'];
@@ -65,7 +72,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=3';
+	$css = url('/assets/css/gaya.css') . '?v=4';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -116,6 +123,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	</div>
 	<p class="kaki__hak">© ' . $tahun . ' ' . e($SITUS['nama']) . '. Seluruh hak cipta dilindungi.</p>
 </footer>
+' . ($u ? '<script src="' . e(url('/assets/js/lonceng.js')) . '" defer></script>' : '') . '
 </body>
 </html>
 ';
