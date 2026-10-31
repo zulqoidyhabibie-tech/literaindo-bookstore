@@ -192,7 +192,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			<label for="naskah">' . ($revisi ? 'Naskah hasil revisi *' : 'Naskah *') . ' <span class="catatan">(PDF/DOC/DOCX, maks. 30 MB)</span></label>
 			<input type="file" id="naskah" name="naskah" accept=".pdf,.doc,.docx">
 			<label for="pernyataan">Surat pernyataan keaslian naskah * <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label>
-			<p class="contoh-unduh">' . ikon('unduh') . '<span>Belum punya suratnya? Unduh contoh: <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.docx')) . '" download>Word (bisa diisi)</a> · <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.pdf')) . '" download>PDF (untuk dicetak)</a>. Isi, tanda tangani di atas meterai Rp10.000, lalu pindai/foto dan unggah di sini.</span></p>
+			<p class="contoh-unduh">' . ikon('unduh') . '<span>Belum punya suratnya? Unduh contoh: <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.docx')) . '" download>Word (bisa diisi)</a> · <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.pdf')) . '" download>PDF (untuk dicetak)</a>. Format resmi Perpusnas. Isi data Anda, tanda tangani kolom <strong>Penulis</strong> di atas meterai Rp10.000 (setiap penulis menandatangani), lalu pindai/foto dan unggah di sini. Kolom Penanggung jawab Penerbit akan ditandatangani oleh Literaindo Press.</span></p>
 			<input type="file" id="pernyataan" name="pernyataan" accept=".pdf,.jpg,.jpeg,.png">
 			<label for="sampul">Desain sampul <span class="catatan">(opsional, JPG/PNG/WebP, maks. 10 MB)</span></label>
 			<input type="file" id="sampul" name="sampul" accept=".jpg,.jpeg,.png,.webp">
