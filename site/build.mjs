@@ -297,7 +297,7 @@ function halamanBuku(b) {
 
 function blokQris() {
 	const gambar = existsSync(join(ROOT, situs.qris_gambar.replace(/^\//, ''))) ? situs.qris_gambar : '/assets/img/qris-contoh.svg';
-	return `<figure class="qris"><img src="${esc(gambar)}" alt="Kode QRIS ${esc(situs.nama)}" width="300" height="300"><figcaption>QRIS a.n. ${esc(situs.qris_nama_merchant)}</figcaption></figure>`;
+	return `<figure class="qris"><img src="${esc(gambar)}" alt="Kode QRIS ${esc(situs.nama)}" width="300"><figcaption>QRIS a.n. ${esc(situs.qris_nama_merchant)}</figcaption></figure>`;
 }
 
 function halamanKonten(file) {
