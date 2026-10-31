@@ -108,10 +108,19 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			} elseif ($aksi === 'tagihan' && in_array($s, ['DITINJAU', 'PROSES_ISBN', 'MENUNGGU_BAYAR_2'], true)) {
 				$jumlah = (int) input('jumlah_cetak');
 				$tagihan = (int) preg_replace('/\D/', '', input('tagihan_2'));
-				if ($jumlah < 1 || $tagihan < 1) {
-					throw new RuntimeException('Isi jumlah cetak dan nominal pelunasan.');
+				if ($jumlah < CETAK_MIN || $tagihan < 1) {
+					throw new RuntimeException('Isi nominal pelunasan dan jumlah cetak (minimal ' . CETAK_MIN . ' eksemplar).');
 				}
-				q('UPDATE pengajuan SET jumlah_cetak = ?, halaman_final = ?, tagihan_2 = ?, rincian_tagihan_2 = ?, diubah = ? WHERE id = ?', [$jumlah, input('halaman_final'), $tagihan, input('rincian_tagihan_2'), sekarang(), $pid]);
+				$spek = [];
+				foreach (PILIHAN_CETAK as $k => [, $opsi]) {
+					$spek[$k] = isset($opsi[input($k)]) ? input($k) : (string) ($p[$k] ?? '');
+				}
+				$sebelum = ringkas_cetak($p);
+				q('UPDATE pengajuan SET jumlah_cetak = ?, halaman_final = ?, tagihan_2 = ?, rincian_tagihan_2 = ?, ukuran = ?, sisi_cetak = ?, warna_isi = ?, jenis_kertas = ?, jenis_sampul = ?, laminasi = ?, diubah = ? WHERE id = ?', [$jumlah, input('halaman_final'), $tagihan, input('rincian_tagihan_2'), $spek['ukuran'], $spek['sisi_cetak'], $spek['warna_isi'], $spek['jenis_kertas'], $spek['jenis_sampul'], $spek['laminasi'], sekarang(), $pid]);
+				$sesudah = ringkas_cetak($spek);
+				if ($sesudah !== $sebelum) {
+					catat($pid, $aid, 'Spesifikasi cetak disesuaikan redaksi menjadi: ' . $sesudah . '.', true);
+				}
 				if ($s === 'DITINJAU') {
 					$bid = buat_buku_dari_pengajuan(satu('SELECT * FROM pengajuan WHERE id = ?', [$pid]), input('slug'), (int) preg_replace('/\D/', '', input('harga_cetak')));
 					q('UPDATE pengajuan SET buku_id = ? WHERE id = ?', [$bid, $pid]);
@@ -154,8 +163,16 @@ function admin_pengajuan_detail(bool $post, string $id): void
 	$form = fn (string $aksi, string $isi, string $tombol, string $kelas = 'tombol') => '<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="' . $aksi . '">' . $isi . '<button type="submit" class="' . $kelas . '">' . $tombol . '</button></form>';
 
 	$form_tagihan = function (bool $buat_buku) use ($p, $form) {
-		$isi = '<div class="kolom-2">
-			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak</label><input type="number" min="1" id="jumlah_cetak" name="jumlah_cetak" required value="' . e((string) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta'])) . '"></div>
+		$spek = '';
+		foreach (PILIHAN_CETAK as $k => [$judul, $opsi]) {
+			$nilai = isset($opsi[$p[$k] ?? '']) ? $p[$k] : array_key_first($opsi);
+			$spek .= '<div><label for="spek_' . $k . '">' . e($judul) . '</label><select id="spek_' . $k . '" name="' . $k . '">'
+				. implode('', array_map(fn ($n, $o) => '<option value="' . e((string) $n) . '"' . ((string) $n === (string) $nilai ? ' selected' : '') . '>' . e($o[0]) . '</option>', array_keys($opsi), $opsi))
+				. '</select></div>';
+		}
+		$isi = '<h4 class="subjudul-form">Spesifikasi cetak</h4><p class="catatan">Sesuai pilihan penulis: <strong>' . e(ringkas_cetak($p)) . '</strong>. Ubah bila disepakati lain dengan penulis.</p><div class="kolom-2">' . $spek . '</div>
+		<h4 class="subjudul-form">Tagihan pelunasan</h4><div class="kolom-2">
+			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. ' . CETAK_MIN . ')</span></label><input type="number" min="' . CETAK_MIN . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . e((string) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta'])) . '"></div>
 			<div><label for="halaman_final">Jumlah halaman final</label><input id="halaman_final" name="halaman_final" placeholder="mis. viii + 180" value="' . e($p['halaman_final']) . '"></div>
 			<div><label for="tagihan_2">Nominal pelunasan (Rp)</label><input id="tagihan_2" name="tagihan_2" inputmode="numeric" required value="' . e($p['tagihan_2'] ?: '') . '"></div>
 			<div><label for="rincian_tagihan_2">Rincian untuk penulis</label><input id="rincian_tagihan_2" name="rincian_tagihan_2" placeholder="mis. 50 eks × Rp45.000 − biaya awal" value="' . e($p['rincian_tagihan_2']) . '"></div>';
@@ -241,7 +258,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
 			<div><dt>Jenis karya</dt><dd>' . e($jk[0]) . '</dd></div>
-			<div><dt>Ukuran</dt><dd>' . e($p['ukuran']) . '</dd></div>
+			' . data_cetak($p) . '
 			<div><dt>Perkiraan halaman</dt><dd>' . e((string) $p['perkiraan_halaman']) . '</dd></div>
 			<div><dt>Cetak diminta</dt><dd>' . e((string) $p['jumlah_cetak_diminta']) . ' eksemplar</dd></div>
 			' . ($p['tagihan_2'] ? '<div><dt>Pelunasan</dt><dd>' . rupiah($p['tagihan_2']) . ' (' . e((string) $p['jumlah_cetak']) . ' eks.)</dd></div>' : '') . '

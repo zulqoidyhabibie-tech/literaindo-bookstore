@@ -343,3 +343,74 @@ function kirim_email(string $ke, string $judul, string $isi): void
 	$header = "From: Literaindo Press <$dari>\r\nContent-Type: text/plain; charset=UTF-8";
 	@mail($ke, '=?UTF-8?B?' . base64_encode($judul) . '?=', $isi, $header);
 }
+
+// ---------------------------------------------------------------------------
+// Spesifikasi cetak buku. Setiap pilihan: [label, keterangan, gambar contoh].
+// Kunci 'ukuran' disimpan apa adanya (teks lengkap) agar data lama tetap terbaca.
+const CETAK_MIN = 5; // 2 Perpusnas RI, 1 Perpusda, 1 arsip penerbit, 1 penulis
+const PILIHAN_CETAK = [
+	'ukuran' => ['Ukuran kertas', [
+		'A5 (14,8 × 21 cm)' => ['A5 · 14,8 × 21 cm', 'Paling umum dan hemat. Cocok untuk novel, buku bacaan, dan buku saku.', 'ukuran-a5'],
+		'B5 (17,6 × 25 cm)' => ['B5 · 17,6 × 25 cm', 'Ukuran buku ajar dan buku referensi.', 'ukuran-b5'],
+		'A4 (21 × 29,7 cm)' => ['A4 · 21 × 29,7 cm', 'Seukuran kertas kantor. Cocok untuk modul, buku kerja, dan laporan.', 'ukuran-a4'],
+	]],
+	'sisi_cetak' => ['Sisi cetak', [
+		'2' => ['2 sisi (bolak-balik)', 'Kertas dicetak depan dan belakang, seperti buku pada umumnya. Buku lebih tipis dan hemat kertas.', 'sisi-2'],
+		'1' => ['1 sisi', 'Hanya bagian depan kertas yang dicetak, bagian belakang dibiarkan kosong.', 'sisi-1'],
+	]],
+	'warna_isi' => ['Warna isi', [
+		'hitam_putih' => ['Hitam putih', 'Isi dicetak hitam-putih. Paling hemat, cocok untuk buku teks.', 'warna-hp'],
+		'warna' => ['Berwarna (full color)', 'Isi dicetak berwarna. Untuk buku bergambar, foto, atau grafik berwarna.', 'warna-penuh'],
+	]],
+	'jenis_kertas' => ['Jenis kertas isi', [
+		'hvs' => ['HVS', 'Putih terang, halus, dan sedikit lebih berat. Cocok untuk buku ajar dan isi berwarna.', 'kertas-hvs'],
+		'bookpaper' => ['Bookpaper', 'Krem kekuningan, ringan, dan nyaman di mata. Umum dipakai untuk novel dan buku bacaan.', 'kertas-bookpaper'],
+	]],
+	'jenis_sampul' => ['Jenis cover', [
+		'soft' => ['Soft cover', 'Sampul kertas tebal yang lentur, dijilid lem panas. Paling umum dipakai.', 'cover-soft'],
+		'hard' => ['Hard cover', 'Sampul papan karton keras dilapisi kertas cetak. Kokoh dan eksklusif.', 'cover-hard'],
+		'spiral' => ['Spiral', 'Dijilid ring kawat, buku bisa dibuka rata 360°. Cocok untuk modul dan buku kerja.', 'cover-spiral'],
+		'staples' => ['Staples', 'Dilipat dan dijepret kawat di punggung. Hanya untuk buku tipis (sekitar 60 halaman atau kurang).', 'cover-staples'],
+	]],
+	'laminasi' => ['Lapisan cover', [
+		'doff' => ['Doff', 'Permukaan tidak mengilap, halus seperti beludru, dan tidak meninggalkan bekas sidik jari.', 'laminasi-doff'],
+		'glossy' => ['Glossy', 'Permukaan mengilap dan memantulkan cahaya, warna tampak lebih cerah.', 'laminasi-glossy'],
+	]],
+];
+
+/** Nilai bawaan untuk pengajuan baru. */
+function cetak_bawaan(): array
+{
+	return array_map(fn ($g) => array_key_first($g[1]), PILIHAN_CETAK);
+}
+
+/** Label pilihan cetak; nilai yang tidak dikenal (data lama) ditampilkan apa adanya. */
+function label_cetak(string $kunci, ?string $nilai): string
+{
+	if ($nilai === null || $nilai === '') {
+		return '-';
+	}
+	return PILIHAN_CETAK[$kunci][1][$nilai][0] ?? $nilai;
+}
+
+/** Ringkasan satu baris, mis. "A5 · 2 sisi · Hitam putih · Bookpaper · Soft cover · Doff". */
+function ringkas_cetak(array $p): string
+{
+	$bagian = [];
+	foreach (array_keys(PILIHAN_CETAK) as $k) {
+		if (($p[$k] ?? '') !== '') {
+			$bagian[] = $k === 'ukuran' ? strtok(label_cetak($k, $p[$k]), ' ') : label_cetak($k, $p[$k]);
+		}
+	}
+	return implode(' · ', $bagian);
+}
+
+/** Baris <dt>/<dd> untuk daftar data buku. */
+function data_cetak(array $p): string
+{
+	$out = '';
+	foreach (PILIHAN_CETAK as $k => [$judul]) {
+		$out .= '<div><dt>' . e($judul) . '</dt><dd>' . e(label_cetak($k, $p[$k] ?? '')) . '</dd></div>';
+	}
+	return $out;
+}

@@ -72,7 +72,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=9';
+	$css = url('/assets/css/gaya.css') . '?v=10';
 
 	echo '<!doctype html>
 <html lang="id">
