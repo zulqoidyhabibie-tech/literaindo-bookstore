@@ -679,6 +679,27 @@ main {
 	margin-left: 0.5rem;
 }
 
+.contoh-unduh {
+	display: flex;
+	gap: 0.5rem;
+	align-items: flex-start;
+	margin: 0.15rem 0 0.35rem;
+	padding: 0.6rem 0.8rem;
+	border-radius: var(--sudut);
+	background: #f3f8f5;
+	font-size: 0.9rem;
+}
+
+.contoh-unduh .ikon {
+	flex: none;
+	margin-top: 0.2rem;
+	color: var(--warna-utama);
+}
+
+.contoh-unduh a {
+	font-weight: 600;
+}
+
 .daftar-notif {
 	list-style: none;
 	margin: 0;
