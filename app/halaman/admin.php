@@ -411,6 +411,7 @@ function admin_buku_form(bool $post, string $id = ''): void
 					[...array_map(fn ($k) => $v[$k], $kolom), $v['status'], $v['harga_cetak'], $v['harga_ebook'], $v['sampul'], $v['tampil'], $slug, sekarang()]);
 				$bid = (int) db()->lastInsertId();
 			}
+			simpan_ebook($bid);
 			pesan('Data buku tersimpan.');
 			arahkan('/admin/buku/' . $bid);
 		} catch (RuntimeException $ex) {
@@ -436,6 +437,9 @@ function admin_buku_form(bool $post, string $id = ''): void
 		<label for="sampul">Sampul ' . ($v['sampul'] ? '(sudah ada, unggah untuk mengganti)' : '') . '</label>
 		' . ($v['sampul'] ? '<img class="pratinjau-sampul" src="' . e(url($v['sampul'])) . '" alt="Sampul saat ini">' : '') . '
 		<input type="file" id="sampul" name="sampul" accept=".jpg,.jpeg,.png,.webp">
+		<label for="ebook">File e-book (PDF, maks. 30 MB) ' . (($b['ebook_path'] ?? '') !== '' ? '<span class="catatan">(sudah ada: ' . e(basename((string) $b['ebook_path'])) . ', unggah untuk mengganti)</span>' : '<span class="catatan">(wajib bila e-book dijual)</span>') . '</label>
+		<input type="file" id="ebook" name="ebook" accept=".pdf">
+		<p class="catatan">File e-book tidak bisa dibuka publik. Pembeli hanya mendapat link unduhan pribadi yang berlaku ' . EBOOK_HARI . ' hari setelah pembayarannya diterima.</p>
 		<label class="centang"><input type="checkbox" id="tampil" name="tampil" value="1"' . ($v['tampil'] ? ' checked' : '') . '> Tampilkan di katalog</label>
 		<div class="formulir__tombol"><button type="submit" class="tombol">Simpan</button></div>
 	</form></section>';

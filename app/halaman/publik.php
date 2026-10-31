@@ -125,7 +125,10 @@ function halaman_buku(bool $post, string $slug): void
 
 	$pesan = $segera
 		? '<p class="catatan">Buku ini segera terbit dan belum dapat dipesan.</p><a class="tombol tombol--wa" href="' . e(wa_link("Halo {$SITUS['nama']}, saya ingin menanyakan jadwal terbit buku \"{$b['judul']}\".")) . '">' . ikon('wa') . ' Tanya jadwal terbit</a>'
-		: '<a class="tombol tombol--wa" href="' . e(wa_link("Halo {$SITUS['nama']}, saya ingin memesan buku \"{$b['judul']}\". Format (cetak/e-book): ")) . '">' . ikon('wa') . ' Pesan via WhatsApp</a><p class="catatan">Pembayaran melalui QRIS. Lihat <a href="' . e(url('/cara-pemesanan/')) . '">cara pemesanan</a>.</p>';
+		: (($b['harga_cetak'] > 0 || ($b['harga_ebook'] > 0 && $b['ebook_path'] !== ''))
+			? '<a class="tombol" href="' . e(url('/pesan/' . $b['slug'])) . '">Beli Buku Ini</a><p class="catatan">Pesan langsung di website. Total pembayaran dan QRIS tampil di halaman pesanan pribadi Anda. Lihat <a href="' . e(url('/cara-pemesanan/')) . '">cara pemesanan</a>.</p>'
+			: '<p class="catatan">Buku ini belum dijual.</p>')
+			. '<a class="tautan-wa" href="' . e(wa_link("Halo {$SITUS['nama']}, saya ingin bertanya tentang buku \"{$b['judul']}\".")) . '">' . ikon('wa') . ' Tanya via WhatsApp</a>';
 
 	$deskripsi = '';
 	foreach (preg_split('/\n\s*\n/', (string) $b['deskripsi']) ?: [] as $p) {

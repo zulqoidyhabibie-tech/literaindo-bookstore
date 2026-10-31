@@ -72,7 +72,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=12';
+	$css = url('/assets/css/gaya.css') . '?v=13';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -142,12 +142,12 @@ function menu_panel(array $item, string $aktif): string
 
 function menu_pengaju(string $aktif): string
 {
-	return menu_panel(['/akun' => 'Pengajuan Saya', '/akun/pengajuan/baru' => 'Ajukan Buku Baru', '/akun/profil' => 'Profil'], $aktif);
+	return menu_panel(['/akun' => 'Pengajuan Saya', '/akun/pengajuan/baru' => 'Ajukan Buku Baru', '/akun/pesanan' => 'Pesanan Buku', '/akun/profil' => 'Profil'], $aktif);
 }
 
 function menu_admin(string $aktif): string
 {
-	return menu_panel(['/admin' => 'Dasbor', '/admin/pengajuan' => 'Pengajuan', '/admin/buku' => 'Katalog', '/admin/harga' => 'Harga Cetak', '/keuangan' => 'Keuangan', '/admin/pengguna' => 'Pengguna', '/admin/pengaturan' => 'Pengaturan'], $aktif);
+	return menu_panel(['/admin' => 'Dasbor', '/admin/pengajuan' => 'Pengajuan', '/admin/buku' => 'Katalog', '/admin/pesanan' => 'Pesanan', '/admin/harga' => 'Harga Cetak', '/keuangan' => 'Keuangan', '/admin/pengguna' => 'Pengguna', '/admin/pengaturan' => 'Pengaturan'], $aktif);
 }
 
 function menu_keuangan(string $aktif): string

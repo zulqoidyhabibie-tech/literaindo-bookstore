@@ -1941,3 +1941,14 @@ ul.pesan {
 .formulir label.centang[hidden] {
 	display: none;
 }
+
+/* Pemesanan buku */
+.pilih-format { display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; border:1px solid #d9ded9; border-radius:8px; margin:.4rem 0; cursor:pointer; background:#fff; }
+.pilih-format span { margin-left:auto; color:#003c2c; font-weight:600; }
+.pilih-format:has(input:checked) { border-color:#003c2c; box-shadow:0 0 0 2px rgba(0,60,44,.15); }
+[data-hanya-cetak][hidden] { display:none !important; }
+.tautan-wa { display:inline-flex; align-items:center; gap:.35rem; margin-left:.8rem; color:#1a7f4b; font-size:.95rem; }
+.tautan-wa svg { width:1.1em; height:1.1em; }
+.kotak-tindakan { align-self:start; border:1px solid #e3e6e3; border-radius:10px; padding:1rem 1.2rem; background:#fafbfa; }
+.kotak-tindakan h2 { margin-top:0; font-size:1.1rem; }
+.kotak-tindakan form { margin-bottom:1rem; }

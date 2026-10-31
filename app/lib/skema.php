@@ -18,11 +18,51 @@ function skema_notifikasi(string $driver): string
 		)$akhir";
 }
 
+function skema_pesanan(string $driver): string
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$teks = $driver === 'sqlite' ? 'TEXT' : 'TEXT';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	return "CREATE TABLE IF NOT EXISTS pesanan (
+			id $id,
+			kode VARCHAR(20) NOT NULL UNIQUE,
+			token VARCHAR(64) NOT NULL,
+			pengguna_id $fk NULL,
+			buku_id $fk NOT NULL,
+			format VARCHAR(10) NOT NULL,
+			jumlah INT NOT NULL DEFAULT 1,
+			harga_satuan INT NOT NULL DEFAULT 0,
+			subtotal INT NOT NULL DEFAULT 0,
+			ongkir INT NOT NULL DEFAULT 0,
+			total INT NOT NULL DEFAULT 0,
+			nama VARCHAR(150) NOT NULL,
+			email VARCHAR(190) NOT NULL,
+			whatsapp VARCHAR(30) NOT NULL DEFAULT '',
+			alamat $teks,
+			kode_pos VARCHAR(10) NOT NULL DEFAULT '',
+			catatan $teks,
+			status VARCHAR(30) NOT NULL,
+			kurir VARCHAR(60) NOT NULL DEFAULT '',
+			resi VARCHAR(120) NOT NULL DEFAULT '',
+			bayar_status VARCHAR(10) NOT NULL DEFAULT '',
+			bukti_path VARCHAR(255) NOT NULL DEFAULT '',
+			bukti_dibuat DATETIME NULL,
+			diverifikasi DATETIME NULL,
+			pemeriksa_id $fk NULL,
+			catatan_bayar VARCHAR(500) NOT NULL DEFAULT '',
+			ebook_sampai DATETIME NULL,
+			ebook_unduh INT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL,
+			diubah DATETIME NOT NULL
+		)$akhir";
+}
+
 /** Tambahkan tabel baru pada database yang dipasang dengan versi lama. */
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 7) {
+	if ($versi >= 8) {
 		return;
 	}
 	if ($versi < 2) {
@@ -58,7 +98,14 @@ function pastikan_skema(): void
 		db()->exec($sql);
 	}
 	isi_harga_awal();
-	simpan_pengaturan('versi_skema', '7');
+	// v8: pemesanan buku lewat website
+	db()->exec(skema_pesanan(config()['db']['driver'] ?? 'mysql'));
+	try {
+		db()->query('SELECT ebook_path FROM buku LIMIT 1');
+	} catch (PDOException) {
+		db()->exec("ALTER TABLE buku ADD COLUMN ebook_path VARCHAR(255) NOT NULL DEFAULT ''");
+	}
+	simpan_pengaturan('versi_skema', '8');
 }
 
 function skema(string $driver): array
@@ -97,6 +144,7 @@ function skema(string $driver): array
 			harga_cetak INT NOT NULL DEFAULT 0,
 			harga_ebook INT NOT NULL DEFAULT 0,
 			sampul VARCHAR(255) NOT NULL DEFAULT '',
+			ebook_path VARCHAR(255) NOT NULL DEFAULT '',
 			deskripsi $teks,
 			tampil TINYINT NOT NULL DEFAULT 1,
 			pengajuan_id $fk NULL,
