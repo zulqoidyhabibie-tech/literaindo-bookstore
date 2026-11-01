@@ -80,6 +80,13 @@ function halaman_daftar(bool $post): void
 			$_SESSION['uid'] = (int) db()->lastInsertId();
 			kirim_email($v['email'], 'Selamat datang di Literaindo Press', "Halo {$v['nama']},\n\nAkun Anda sudah aktif. Ajukan naskah buku Anda di: " . url_absolut('/akun/pengajuan/baru') . "\n\nSalam,\nLiteraindo Press");
 			notif_admin('Penulis baru mendaftar: ' . $v['nama'] . ' (' . $v['email'] . ')', '/admin/pengguna');
+			$kembali = (string) ($_SESSION['kembali'] ?? '');
+			unset($_SESSION['kembali']);
+			if (str_starts_with($kembali, base() . '/akun/hki')) {
+				pesan('Akun berhasil dibuat. Silakan isi formulir HKI.');
+				header('Location: ' . $kembali, true, 303);
+				exit;
+			}
 			pesan('Akun berhasil dibuat. Silakan ajukan buku Anda.');
 			arahkan('/akun/pengajuan/baru');
 		}

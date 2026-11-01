@@ -58,11 +58,70 @@ function skema_pesanan(string $driver): string
 		)$akhir";
 }
 
+/** Pengajuan HKI (pencatatan hak cipta di DJKI), berkasnya, dan riwayatnya. */
+function skema_hki(string $driver): array
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$teks = $driver === 'sqlite' ? 'TEXT' : 'MEDIUMTEXT';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	return [
+		"CREATE TABLE IF NOT EXISTS hki (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			pengajuan_id $fk NULL,
+			jenis_ciptaan VARCHAR(30) NOT NULL DEFAULT 'buku',
+			judul VARCHAR(255) NOT NULL,
+			uraian $teks,
+			tanggal_umum VARCHAR(10) NOT NULL DEFAULT '',
+			tempat_umum VARCHAR(150) NOT NULL DEFAULT '',
+			pencipta $teks,
+			pemegang $teks,
+			tautan_contoh VARCHAR(255) NOT NULL DEFAULT '',
+			biaya INT NOT NULL DEFAULT 0,
+			status VARCHAR(30) NOT NULL DEFAULT 'DRAF',
+			bayar_status VARCHAR(10) NOT NULL DEFAULT '',
+			bukti_berkas_id $fk NULL,
+			bukti_dibuat DATETIME NULL,
+			diverifikasi DATETIME NULL,
+			pemeriksa_id $fk NULL,
+			catatan_bayar VARCHAR(500) NOT NULL DEFAULT '',
+			nomor_permohonan VARCHAR(60) NOT NULL DEFAULT '',
+			tanggal_permohonan VARCHAR(10) NOT NULL DEFAULT '',
+			nomor_pencatatan VARCHAR(60) NOT NULL DEFAULT '',
+			dibuat DATETIME NOT NULL,
+			diubah DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE IF NOT EXISTS hki_berkas (
+			id $id,
+			hki_id $fk NOT NULL,
+			jenis VARCHAR(20) NOT NULL,
+			path VARCHAR(255) NOT NULL,
+			nama_asli VARCHAR(255) NOT NULL,
+			ukuran INT NOT NULL DEFAULT 0,
+			pengunggah_id $fk NULL,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE IF NOT EXISTS hki_catatan (
+			id $id,
+			hki_id $fk NOT NULL,
+			pengguna_id $fk NULL,
+			isi $teks NOT NULL,
+			sistem TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+	];
+}
+
 /** Tambahkan tabel baru pada database yang dipasang dengan versi lama. */
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
+	if ($versi >= 10) {
+		return;
+	}
 	if ($versi >= 9) {
+		pastikan_skema_hki();
 		return;
 	}
 	if ($versi < 2) {
@@ -112,6 +171,16 @@ function pastikan_skema(): void
 		db()->exec("ALTER TABLE pengajuan ADD COLUMN format_terbit VARCHAR(10) NOT NULL DEFAULT 'cetak'");
 	}
 	simpan_pengaturan('versi_skema', '9');
+	pastikan_skema_hki();
+}
+
+/** v10: pengajuan HKI. */
+function pastikan_skema_hki(): void
+{
+	foreach (skema_hki(config()['db']['driver'] ?? 'mysql') as $sql) {
+		db()->exec($sql);
+	}
+	simpan_pengaturan('versi_skema', '10');
 }
 
 function skema(string $driver): array
@@ -224,6 +293,7 @@ function skema(string $driver): array
 			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
 		)$akhir",
 		skema_notifikasi($driver),
+		...skema_hki($driver),
 		"CREATE TABLE pengaturan (
 			k VARCHAR(60) NOT NULL PRIMARY KEY,
 			v $teks NOT NULL

@@ -411,6 +411,7 @@ function pengaju_detail(bool $post, string $id): void
 	<div class="judul-baris"><h1>' . e($p['judul']) . '</h1>' . label_status($p['status']) . '</div>
 	' . ($p['status'] !== 'DITOLAK' ? stepper($p['status']) : '') . '
 	<div class="kotak-langkah"><h2>Langkah berikutnya</h2>' . $langkah . '</div>
+	' . kotak_hki_pengajuan($p) . '
 	<div class="dua-kolom">
 		<section><h2>Data buku</h2><dl class="data-ringkas">
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>

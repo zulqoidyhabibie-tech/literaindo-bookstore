@@ -44,11 +44,31 @@ const MIME_DIIZINKAN = [
  */
 function simpan_unggahan(string $field, string $jenis, int $pengajuan_id): ?int
 {
+	$hasil = pindahkan_unggahan($field, JENIS_BERKAS[$jenis], (string) $pengajuan_id, $jenis);
+	if (!$hasil) {
+		return null;
+	}
+	$u = pengguna();
+	q(
+		'INSERT INTO berkas (pengajuan_id, jenis, path, nama_asli, ukuran, pengunggah_id, dibuat) VALUES (?, ?, ?, ?, ?, ?, ?)',
+		[$pengajuan_id, $jenis, $hasil['path'], $hasil['nama_asli'], $hasil['ukuran'], $u ? $u['id'] : null, sekarang()]
+	);
+	return (int) db()->lastInsertId();
+}
+
+/**
+ * Periksa satu berkas dari $_FILES[$field] lalu pindahkan ke DATA_DIR/berkas/$folder.
+ * $aturan: [label, ekstensi yang boleh, ukuran maks. MB]. Mengembalikan
+ * ['path', 'nama_asli', 'ukuran'], null bila tidak ada berkas, atau melempar
+ * RuntimeException berisi pesan untuk pengguna.
+ */
+function pindahkan_unggahan(string $field, array $aturan, string $folder, string $awalan): ?array
+{
 	$f = $_FILES[$field] ?? null;
 	if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
 		return null;
 	}
-	[$label, $ext_ok, $maks_mb] = JENIS_BERKAS[$jenis];
+	[$label, $ext_ok, $maks_mb] = $aturan;
 	if ($f['error'] !== UPLOAD_ERR_OK) {
 		throw new RuntimeException("$label gagal diunggah. Pastikan ukurannya di bawah {$maks_mb} MB.");
 	}
@@ -64,21 +84,15 @@ function simpan_unggahan(string $field, string $jenis, int $pengajuan_id): ?int
 		throw new RuntimeException("Isi berkas $label tidak sesuai dengan formatnya.");
 	}
 
-	$folder = DATA_DIR . '/berkas/' . $pengajuan_id;
-	if (!is_dir($folder) && !mkdir($folder, 0750, true)) {
+	$tujuan = DATA_DIR . '/berkas/' . $folder;
+	if (!is_dir($tujuan) && !mkdir($tujuan, 0750, true)) {
 		throw new RuntimeException('Folder penyimpanan tidak dapat dibuat. Hubungi admin.');
 	}
-	$nama = $jenis . '-' . bin2hex(random_bytes(8)) . '.' . $ext;
-	if (!move_uploaded_file($f['tmp_name'], "$folder/$nama")) {
+	$nama = $awalan . '-' . bin2hex(random_bytes(8)) . '.' . $ext;
+	if (!move_uploaded_file($f['tmp_name'], "$tujuan/$nama")) {
 		throw new RuntimeException("$label tidak dapat disimpan. Coba lagi.");
 	}
-
-	$u = pengguna();
-	q(
-		'INSERT INTO berkas (pengajuan_id, jenis, path, nama_asli, ukuran, pengunggah_id, dibuat) VALUES (?, ?, ?, ?, ?, ?, ?)',
-		[$pengajuan_id, $jenis, "$pengajuan_id/$nama", mb_substr(basename((string) $f['name']), 0, 200), (int) $f['size'], $u ? $u['id'] : null, sekarang()]
-	);
-	return (int) db()->lastInsertId();
+	return ['path' => "$folder/$nama", 'nama_asli' => mb_substr(basename((string) $f['name']), 0, 200), 'ukuran' => (int) $f['size']];
 }
 
 function berkas_terakhir(int $pengajuan_id, string $jenis): ?array
