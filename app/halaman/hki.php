@@ -464,6 +464,7 @@ function formulir_hki(array $u, ?array $h, ?array $pj, bool $post): void
 					<div class="lebar-penuh"><label for="pemegang_alamat">Alamat lengkap *</label><textarea id="pemegang_alamat" name="pemegang_alamat" rows="2">' . e($pm['alamat']) . '</textarea></div>
 				</div>
 				<label for="pengalihan">Surat pengalihan hak cipta * <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label>
+				<p class="contoh-unduh">' . ikon('unduh') . '<span>Unduh contoh: <a href="' . e(url('/assets/unduh/surat-pengalihan-hak-cipta.doc')) . '" download>Word (bisa diisi)</a> · <a href="' . e(url('/assets/unduh/surat-pengalihan-hak-cipta.pdf')) . '" download>PDF (untuk dicetak)</a>. Diisi dan ditandatangani pencipta (Pihak I) dan pemegang hak cipta (Pihak II), dengan meterai Rp10.000, lalu pindai/foto dan unggah di sini.</span></p>
 				' . $ada('pengalihan') . '<input type="file" id="pengalihan" name="pengalihan" accept=".pdf,.jpg,.jpeg,.png">
 			</div>
 		</fieldset>
@@ -471,6 +472,7 @@ function formulir_hki(array $u, ?array $h, ?array $pj, bool $post): void
 			<label for="ktp">Scan KTP seluruh pencipta * <span class="catatan">(gabungkan dalam satu PDF bila lebih dari satu orang; PDF/JPG/PNG, maks. 10 MB)</span></label>
 			' . $ada('ktp') . '<input type="file" id="ktp" name="ktp" accept=".pdf,.jpg,.jpeg,.png">
 			<label for="pernyataan">Surat pernyataan hak cipta * <span class="catatan">(format DJKI, ditandatangani di atas meterai Rp10.000; PDF/JPG/PNG, maks. 5 MB)</span></label>
+			<p class="contoh-unduh">' . ikon('unduh') . '<span>Belum punya suratnya? Unduh contoh: <a href="' . e(url('/assets/unduh/surat-pernyataan-hak-cipta.docx')) . '" download>Word (bisa diisi)</a> · <a href="' . e(url('/assets/unduh/surat-pernyataan-hak-cipta.pdf')) . '" download>PDF (untuk dicetak)</a>. Isi nama, kewarganegaraan, alamat, jenis dan judul ciptaan, lalu setiap pemegang hak cipta menandatangani di atas meterai Rp10.000. Pindai/foto dan unggah di sini.</span></p>
 			' . $ada('pernyataan') . '<input type="file" id="pernyataan" name="pernyataan" accept=".pdf,.jpg,.jpeg,.png">
 			<label for="contoh">Contoh ciptaan * <span class="catatan">(mis. PDF buku lengkap; PDF/DOC/DOCX/JPG/PNG, maks. 30 MB)</span></label>
 			' . $ada('contoh') . '<input type="file" id="contoh" name="contoh" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
