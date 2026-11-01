@@ -33,6 +33,7 @@ const IKON = [
 	'keluar'    => '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
 	'tambah'    => '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
 	'lainnya'   => '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+	'hki'       => '<circle cx="12" cy="9" r="6"/><path d="m9.5 14.5-1.5 7.5 4-2 4 2-1.5-7.5"/><path d="M10 9h4"/>',
 	'unduh'     => '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
 ];
 
@@ -83,7 +84,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=16';
+	$css = url('/assets/css/gaya.css') . '?v=17';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -198,9 +199,10 @@ function menu_pengaju(string $aktif): string
 	$giliran = "'" . implode("','", array_keys(array_filter(STATUS, fn ($s) => $s[2] === 'pengaju'))) . "'";
 	$naskah = hitung_tugas("SELECT COUNT(*) AS n FROM pengajuan WHERE pengguna_id = ? AND status IN ($giliran) AND status <> 'DRAF'", [$uid]);
 	$pesanan = hitung_tugas("SELECT COUNT(*) AS n FROM pesanan WHERE pengguna_id = ? AND status = 'MENUNGGU_BAYAR'", [$uid]);
+	$hki = hitung_tugas("SELECT COUNT(*) AS n FROM hki WHERE pengguna_id = ? AND status IN ('MENUNGGU_BAYAR','PERLU_PERBAIKAN')", [$uid]);
 	return menu_panel([
-		'' => [['/akun', 'Pengajuan Saya', 'naskah', $naskah], ['/akun/pengajuan/baru', 'Ajukan Buku', 'tambah'], ['/akun/pesanan', 'Pesanan Buku', 'keranjang', $pesanan], ['/akun/profil', 'Profil', 'akun']],
-	], ['/akun', '/akun/pengajuan/baru', '/akun/pesanan', '/akun/profil'], $aktif);
+		'' => [['/akun', 'Pengajuan Saya', 'naskah', $naskah], ['/akun/pengajuan/baru', 'Ajukan Buku', 'tambah'], ['/akun/hki', 'Pengajuan HKI', 'hki', $hki], ['/akun/pesanan', 'Pesanan Buku', 'keranjang', $pesanan], ['/akun/profil', 'Profil', 'akun']],
+	], ['/akun', '/akun/pengajuan/baru', '/akun/hki', '/akun/pesanan'], $aktif);
 }
 
 function menu_admin(string $aktif): string
@@ -208,9 +210,10 @@ function menu_admin(string $aktif): string
 	$naskah = hitung_tugas("SELECT COUNT(*) AS n FROM pengajuan WHERE status IN ('DITINJAU','PROSES_ISBN','LUNAS')");
 	$pesanan = hitung_tugas("SELECT COUNT(*) AS n FROM pesanan WHERE status IN ('MENUNGGU_ONGKIR','DIPROSES')");
 	$bayar = jumlah_verifikasi();
+	$hki = hitung_tugas("SELECT COUNT(*) AS n FROM hki WHERE status = 'DIPERIKSA'");
 	return menu_panel([
 		'' => [['/admin', 'Dasbor', 'dasbor']],
-		'Naskah' => [['/admin/pengajuan', 'Pengajuan', 'naskah', $naskah], ['/admin/buku', 'Katalog', 'buku']],
+		'Naskah' => [['/admin/pengajuan', 'Pengajuan', 'naskah', $naskah], ['/admin/hki', 'HKI', 'hki', $hki], ['/admin/buku', 'Katalog', 'buku']],
 		'Penjualan' => [['/admin/pesanan', 'Pesanan', 'keranjang', $pesanan], ['/keuangan', 'Keuangan', 'uang', $bayar], ['/admin/harga', 'Harga Cetak', 'harga']],
 		'Pengaturan' => [['/admin/halaman', 'Halaman Website', 'halaman'], ['/admin/pengguna', 'Pengguna', 'orang'], ['/admin/pengaturan', 'Pengaturan', 'atur']],
 	], ['/admin', '/admin/pengajuan', '/admin/pesanan', '/keuangan'], $aktif);
@@ -223,11 +226,12 @@ function menu_keuangan(string $aktif): string
 	], ['/keuangan', '/akun/profil'], $aktif);
 }
 
-/** Bukti bayar (pengajuan + pesanan) yang menunggu diperiksa keuangan. */
+/** Bukti bayar (pengajuan + pesanan + HKI) yang menunggu diperiksa keuangan. */
 function jumlah_verifikasi(): int
 {
 	return hitung_tugas("SELECT COUNT(*) AS n FROM pembayaran WHERE status = 'menunggu'")
-		+ hitung_tugas("SELECT COUNT(*) AS n FROM pesanan WHERE status = 'VERIFIKASI_BAYAR'");
+		+ hitung_tugas("SELECT COUNT(*) AS n FROM pesanan WHERE status = 'VERIFIKASI_BAYAR'")
+		+ hitung_tugas("SELECT COUNT(*) AS n FROM hki WHERE status = 'VERIFIKASI_BAYAR'");
 }
 
 /** Blok QRIS dengan nominal yang harus dibayar. */

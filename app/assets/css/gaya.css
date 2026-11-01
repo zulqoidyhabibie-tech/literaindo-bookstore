@@ -1966,3 +1966,17 @@ textarea.isian-tumbuh { resize: vertical; min-height: 2.8rem; overflow: hidden; 
 .pilih-format-terbit .pilih-format strong { font-weight: 600; }
 .pilih-format-terbit .pilih-format input { margin-top: .3rem; }
 .paket[hidden], [data-blok-cetak][hidden], fieldset[data-hanya-cetak][hidden] { display: none !important; }
+
+/* Pengajuan HKI */
+.pencipta {
+	border: 1px solid var(--garis, #dfe5e2);
+	border-radius: 10px;
+	padding: 0.75rem 1rem 0.5rem;
+	margin: 0 0 1rem;
+}
+.pencipta legend { font-weight: 600; padding: 0 0.35rem; }
+.salin-djki {
+	width: 100%;
+	font: 0.85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	margin-top: 0.5rem;
+}

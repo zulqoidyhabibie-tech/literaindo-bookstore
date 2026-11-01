@@ -203,6 +203,8 @@ function halaman_konten(bool $post, string $slug): void
 		'paket' => kartu_paket(),
 		'url_daftar' => e(url('/daftar')),
 		'url_akun' => e(url('/akun')),
+		'url_hki' => e(url('/akun/hki/baru')),
+		'harga_hki' => rupiah(harga_hki()),
 	];
 	$html = preg_replace_callback('/\{\{(\w+)\}\}/', fn ($x) => $ganti[$x[1]] ?? $x[0], (string) preg_replace('/<!--\s*judul:.*?-->\s*/', '', $mentah));
 	tampil($judul, '<article class="panel konten"><h1>' . e($judul) . "</h1>\n" . $html . '</article>', ['path' => "/$slug/", 'kelas' => 'halaman-konten']);

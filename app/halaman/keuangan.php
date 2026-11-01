@@ -5,7 +5,7 @@
 declare(strict_types=1);
 
 const STATUS_BAYAR = ['menunggu' => 'Menunggu verifikasi', 'diterima' => 'Diterima', 'ditolak' => 'Ditolak'];
-const TAHAP_BAYAR = [1 => 'Biaya awal', 2 => 'Pelunasan', 3 => 'Penjualan buku'];
+const TAHAP_BAYAR = [1 => 'Biaya awal', 2 => 'Pelunasan', 3 => 'Penjualan buku', 4 => 'Layanan HKI'];
 
 /**
  * Terima atau tolak bukti bayar yang sedang menunggu verifikasi.
@@ -44,7 +44,7 @@ function filter_transaksi(): array
 	$f = [
 		'dari' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['dari'] ?? '') ? $_GET['dari'] : date('Y-m-01'),
 		'sampai' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['sampai'] ?? '') ? $_GET['sampai'] : date('Y-m-d'),
-		'tahap' => in_array($_GET['tahap'] ?? '', ['1', '2', '3'], true) ? $_GET['tahap'] : '',
+		'tahap' => in_array($_GET['tahap'] ?? '', ['1', '2', '3', '4'], true) ? $_GET['tahap'] : '',
 		'status' => isset(STATUS_BAYAR[$_GET['status'] ?? '']) ? $_GET['status'] : '',
 		'cari' => trim((string) ($_GET['cari'] ?? '')),
 	];
@@ -68,9 +68,10 @@ function filter_transaksi(): array
 /** Transaksi pengajuan (biaya awal, pelunasan) + penjualan buku, terbaru dulu. */
 function data_transaksi(string $where, array $param, array $f = []): array
 {
-	$pengajuan = ($f['tahap'] ?? '') === '3' ? [] : data_transaksi_pengajuan($where, $param);
+	$pengajuan = in_array($f['tahap'] ?? '', ['3', '4'], true) ? [] : data_transaksi_pengajuan($where, $param);
 	$pesanan = in_array($f['tahap'] ?? '', ['', '3'], true) ? data_transaksi_pesanan($f) : [];
-	$semua = array_merge($pengajuan, $pesanan);
+	$hki = in_array($f['tahap'] ?? '', ['', '4'], true) ? data_transaksi_hki($f) : [];
+	$semua = array_merge($pengajuan, $pesanan, $hki);
 	usort($semua, fn ($a, $b) => strcmp($b['dibuat'], $a['dibuat']));
 	return $semua;
 }
@@ -97,6 +98,38 @@ function data_transaksi_pesanan(array $f): array
 	));
 }
 
+/** Bukti bayar layanan HKI dalam bentuk baris transaksi. */
+function data_transaksi_hki(array $f): array
+{
+	$w = ["h.bayar_status <> ''", 'h.bukti_dibuat >= ?', 'h.bukti_dibuat <= ?'];
+	$p = [($f['dari'] ?? date('Y-m-01')) . ' 00:00:00', ($f['sampai'] ?? date('Y-m-d')) . ' 23:59:59'];
+	if (($f['status'] ?? '') !== '') {
+		$w[] = 'h.bayar_status = ?';
+		$p[] = $f['status'];
+	}
+	if (($f['cari'] ?? '') !== '') {
+		$w[] = '(h.judul LIKE ? OR u.nama LIKE ? OR u.email LIKE ?)';
+		array_push($p, "%{$f['cari']}%", "%{$f['cari']}%", "%{$f['cari']}%");
+	}
+	return array_map(fn ($r) => $r + ['tahap' => 4, 'berkas_id' => null, 'pengajuan_id' => null], semua(
+		'SELECT h.id, h.bukti_dibuat AS dibuat, h.biaya AS nominal, h.bayar_status AS status, h.diverifikasi, h.catatan_bayar AS catatan, h.status AS status_hki,
+			h.bukti_berkas_id, u.nama, u.email, u.whatsapp, h.judul, v.nama AS pemeriksa
+		FROM hki h JOIN pengguna u ON u.id = h.pengguna_id LEFT JOIN pengguna v ON v.id = h.pemeriksa_id
+		WHERE ' . implode(' AND ', $w),
+		$p
+	));
+}
+
+/** Link bukti bayar untuk satu baris transaksi. */
+function url_bukti(array $t): string
+{
+	return match ((int) $t['tahap']) {
+		3 => url('/pesanan/' . $t['kode'] . '/bukti'),
+		4 => $t['bukti_berkas_id'] ? url('/hki/berkas/' . $t['bukti_berkas_id']) : '',
+		default => $t['berkas_id'] ? url('/berkas/' . $t['berkas_id']) : '',
+	};
+}
+
 function data_transaksi_pengajuan(string $where, array $param): array
 {
 	return semua(
@@ -116,12 +149,29 @@ function no_transaksi(array $t): string
 	if ((int) $t['tahap'] === 3) {
 		return $t['kode'];
 	}
+	if ((int) $t['tahap'] === 4) {
+		return no_hki($t);
+	}
 	return 'TRX-' . date('Ymd', strtotime($t['dibuat'])) . '-' . str_pad((string) $t['id'], 4, '0', STR_PAD_LEFT);
 }
 
 function keuangan_transaksi(bool $post): void
 {
 	$u = wajib_masuk(['keuangan', 'admin']);
+	if ($post && input('hki_id') !== '') {
+		$h = satu('SELECT * FROM hki WHERE id = ?', [(int) input('hki_id')]);
+		$aksi = $_POST['aksi'] ?? '';
+		try {
+			if (!$h || !in_array($aksi, ['terima', 'tolak'], true)) {
+				throw new RuntimeException('Data tidak ditemukan.');
+			}
+			verifikasi_hki($h, $aksi === 'terima', mb_substr(input('catatan'), 0, 500));
+			pesan($aksi === 'terima' ? 'Pembayaran HKI "' . $h['judul'] . '" diterima. Pemohon dan admin sudah diberi tahu.' : 'Bukti bayar HKI "' . $h['judul'] . '" ditolak. Pemohon diminta mengunggah ulang.');
+		} catch (RuntimeException $ex) {
+			pesan($ex->getMessage(), 'galat');
+		}
+		arahkan('/keuangan' . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : ''));
+	}
 	if ($post && input('pesanan_id') !== '') {
 		$o = satu('SELECT * FROM pesanan WHERE id = ?', [(int) input('pesanan_id')]);
 		$aksi = $_POST['aksi'] ?? '';
@@ -187,7 +237,23 @@ function keuangan_transaksi(bool $post): void
 			</div>
 		</li>';
 	}
-	$antre = array_merge($antre, $antre_pesanan);
+	$antre_hki = semua("SELECT h.*, u.nama FROM hki h JOIN pengguna u ON u.id = h.pengguna_id WHERE h.status = 'VERIFIKASI_BAYAR' ORDER BY h.bukti_dibuat");
+	foreach ($antre_hki as $h) {
+		$id = (int) $h['id'];
+		$kartu .= '<li class="verifikasi">
+			<div class="verifikasi__info">
+				<strong>Layanan HKI · ' . rupiah($h['biaya']) . '</strong>
+				<span>' . e($h['nama']) . ' · ' . e($h['judul']) . '</span>
+				<span class="catatan">' . e(no_hki($h)) . ' · diunggah ' . e(tanggal($h['bukti_dibuat'])) . '</span>
+			</div>
+			<div class="verifikasi__aksi">
+				' . ($h['bukti_berkas_id'] ? '<a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/hki/berkas/' . $h['bukti_berkas_id'])) . '" target="_blank">' . ikon('unduh') . ' Lihat bukti</a>' : '') . '
+				<form method="post">' . csrf_field() . '<input type="hidden" name="hki_id" value="' . $id . '"><input type="hidden" name="aksi" value="terima"><button type="submit" class="tombol tombol--kecil">Terima</button></form>
+				<details><summary>Tolak</summary><form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="hki_id" value="' . $id . '"><input type="hidden" name="aksi" value="tolak"><label for="alasan-h' . $id . '">Alasan (dikirim ke pemohon)</label><textarea id="alasan-h' . $id . '" name="catatan" rows="2" required></textarea><button type="submit" class="tombol tombol--bahaya tombol--kecil">Tolak Bukti</button></form></details>
+			</div>
+		</li>';
+	}
+	$antre = array_merge($antre, $antre_pesanan, $antre_hki);
 	$blok_antre = '<section class="panel panel--verifikasi"><h2>Perlu verifikasi (' . count($antre) . ')</h2>'
 		. ($kartu ? '<p class="catatan">Cocokkan nominal dan waktu dengan mutasi rekening/QRIS perusahaan sebelum menekan Terima.</p><ul class="daftar-verifikasi">' . $kartu . '</ul>' : '<p class="kosong">Tidak ada bukti bayar yang menunggu verifikasi.</p>')
 		. '</section>';
@@ -196,7 +262,7 @@ function keuangan_transaksi(bool $post): void
 	$data = data_transaksi($where, $param, $f);
 
 	$jumlah = ['diterima' => 0, 'menunggu' => 0, 'ditolak' => 0];
-	$per_tahap = [1 => 0, 2 => 0, 3 => 0];
+	$per_tahap = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
 	foreach ($data as $t) {
 		$jumlah[$t['status']] += (int) $t['nominal'];
 		if ($t['status'] === 'diterima') {
@@ -215,7 +281,7 @@ function keuangan_transaksi(bool $post): void
 			<td>' . e(TAHAP_BAYAR[(int) $t['tahap']] ?? '') . '</td>
 			<td class="angka">' . rupiah($t['nominal']) . '</td>
 			<td><span class="lencana lencana--' . $kelas . '">' . e(STATUS_BAYAR[$t['status']]) . '</span>' . ($t['diverifikasi'] ? '<br><span class="catatan">' . e(tanggal($t['diverifikasi'])) . ($t['pemeriksa'] ? ' · ' . e($t['pemeriksa']) : '') . '</span>' : '') . ($t['status'] === 'ditolak' && $t['catatan'] ? '<br><span class="catatan">' . e($t['catatan']) . '</span>' : '') . '</td>
-			<td>' . ($t['berkas_id'] ? '<a href="' . e(url('/berkas/' . $t['berkas_id'])) . '" target="_blank">Lihat</a>' : ((int) $t['tahap'] === 3 ? '<a href="' . e(url('/pesanan/' . $t['kode'] . '/bukti')) . '" target="_blank">Lihat</a>' : '')) . '</td>
+			<td>' . (url_bukti($t) !== '' ? '<a href="' . e(url_bukti($t)) . '" target="_blank">Lihat</a>' : '') . '</td>
 		</tr>';
 	}
 
@@ -237,6 +303,7 @@ function keuangan_transaksi(bool $post): void
 		<div class="kotak-status"><span class="kotak-status__angka">' . rupiah($per_tahap[1]) . '</span><span>Biaya awal</span></div>
 		<div class="kotak-status"><span class="kotak-status__angka">' . rupiah($per_tahap[2]) . '</span><span>Pelunasan</span></div>
 		<div class="kotak-status"><span class="kotak-status__angka">' . rupiah($per_tahap[3]) . '</span><span>Penjualan buku</span></div>
+		<div class="kotak-status"><span class="kotak-status__angka">' . rupiah($per_tahap[4]) . '</span><span>Layanan HKI</span></div>
 		<div class="kotak-status' . ($jumlah['menunggu'] ? ' kotak-status--tindakan' : '') . '"><span class="kotak-status__angka">' . rupiah($jumlah['menunggu']) . '</span><span>Menunggu verifikasi</span></div>
 		<div class="kotak-status"><span class="kotak-status__angka">' . rupiah($piutang['total']) . '</span><span>Tagihan pelunasan belum lunas (' . (int) $piutang['n'] . ' buku, semua periode)</span></div>
 	</div>
@@ -261,7 +328,7 @@ function keuangan_unduh(bool $post): void
 		// Cegah formula Excel dari isian pengguna (=, +, -, @).
 		fputcsv($out, array_map(fn ($v) => is_string($v) && preg_match('/^[=+\-@\t\r]/', $v) ? "'" . $v : $v, $baris), ';', '"', '');
 	};
-	$tulis(['No. Transaksi', 'Tanggal Bayar', 'Jenis', 'Nominal (Rp)', 'Status', 'Tanggal Verifikasi', 'Diverifikasi Oleh', 'Catatan', 'Nama Penulis/Pembeli', 'Email', 'WhatsApp', 'ID Pengajuan/Kode Pesanan', 'Judul Buku', 'Status Pengajuan/Pesanan']);
+	$tulis(['No. Transaksi', 'Tanggal Bayar', 'Jenis', 'Nominal (Rp)', 'Status', 'Tanggal Verifikasi', 'Diverifikasi Oleh', 'Catatan', 'Nama Penulis/Pembeli', 'Email', 'WhatsApp', 'ID Pengajuan/Kode Pesanan/No. HKI', 'Judul Buku/Ciptaan', 'Status']);
 	foreach ($data as $t) {
 		$tulis([
 			no_transaksi($t),
@@ -275,9 +342,13 @@ function keuangan_unduh(bool $post): void
 			$t['nama'],
 			$t['email'],
 			$t['whatsapp'],
-			(int) $t['tahap'] === 3 ? $t['kode'] : (int) $t['pengajuan_id'],
+			match ((int) $t['tahap']) { 3 => $t['kode'], 4 => no_hki($t), default => (int) $t['pengajuan_id'] },
 			$t['judul'],
-			(int) $t['tahap'] === 3 ? (STATUS_PESANAN[$t['status_pesanan']][0] ?? $t['status_pesanan']) : (STATUS[$t['status_pengajuan']][0] ?? $t['status_pengajuan']),
+			match ((int) $t['tahap']) {
+				3 => STATUS_PESANAN[$t['status_pesanan']][0] ?? $t['status_pesanan'],
+				4 => STATUS_HKI[$t['status_hki']][0] ?? $t['status_hki'],
+				default => STATUS[$t['status_pengajuan']][0] ?? $t['status_pengajuan'],
+			},
 		]);
 	}
 	fclose($out);

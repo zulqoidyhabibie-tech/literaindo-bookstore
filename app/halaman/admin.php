@@ -19,9 +19,11 @@ function admin_dasbor(bool $post): void
 		$kotak .= '<a class="kotak-status' . ($giliran === 'admin' && $n ? ' kotak-status--tindakan' : '') . '" href="' . e(url('/admin/pengajuan?status=' . $kode)) . '"><span class="kotak-status__angka">' . $n . '</span><span>' . e($label) . '</span></a>';
 	}
 	$tindakan = semua("SELECT p.*, u.nama FROM pengajuan p JOIN pengguna u ON u.id = p.pengguna_id WHERE p.status IN ('VERIFIKASI_BAYAR_1','DITINJAU','PROSES_ISBN','VERIFIKASI_BAYAR_2','LUNAS') ORDER BY p.diubah ASC");
+	$hki_periksa = (int) satu("SELECT COUNT(*) AS n FROM hki WHERE status = 'DIPERIKSA'")['n'];
 	$isi = '<section class="panel"><h1>Dasbor Admin</h1>
 	<div class="kotak-status-grid">' . $kotak . '</div>
 	<h2>Menunggu tindakan Anda (' . count($tindakan) . ')</h2>' . tabel_pengajuan($tindakan) . '
+	' . ($hki_periksa ? '<p class="pesan pesan--info">' . $hki_periksa . ' permohonan HKI menunggu pemeriksaan. <a href="' . e(url('/admin/hki?status=DIPERIKSA')) . '">Buka Pengajuan HKI</a></p>' : '') . '
 	<p class="catatan">Jumlah buku di katalog: ' . (int) satu('SELECT COUNT(*) AS n FROM buku')['n'] . ' · Pengguna terdaftar: ' . (int) satu('SELECT COUNT(*) AS n FROM pengguna')['n'] . '</p></section>';
 	tampil('Dasbor Admin', $isi, ['panel' => menu_admin('/admin')]);
 }
@@ -359,6 +361,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 			<div><dt>Jenis karya</dt><dd>' . e($jk[0]) . '</dd></div>
 			<div><dt>Jenis ISBN</dt><dd>' . e(FORMAT_TERBIT[$p['format_terbit'] ?? 'cetak'][0] ?? '-') . '</dd></div>
 			<div><dt>Paket</dt><dd>' . e(PAKET[$p['paket']][0] ?? '-') . '</dd></div>
+			' . (($hki = hki_pengajuan($pid)) ? '<div><dt>HKI</dt><dd><a href="' . e(url('/admin/hki/' . $hki['id'])) . '">' . e(STATUS_HKI[$hki['status']][0]) . '</a></dd></div>' : (($p['paket'] ?? '') === 'pustaka' ? '<div><dt>HKI</dt><dd>Termasuk paket; penulis belum mengisi data HKI</dd></div>' : '')) . '
 			' . data_cetak($p) . '
 			<div><dt>Perkiraan halaman</dt><dd>' . e((string) $p['perkiraan_halaman']) . '</dd></div>
 			<div><dt>Cetak diminta</dt><dd>' . e((string) $p['jumlah_cetak_diminta']) . ' eksemplar</dd></div>
@@ -555,6 +558,10 @@ function admin_pengaturan(bool $post): void
 			}
 			simpan_pengaturan('batas_halaman_paket', (string) max(1, (int) input('batas_halaman_paket', '200')));
 			simpan_pengaturan('margin_cetak', (string) max(0, min(500, (int) input('margin_cetak', '30'))));
+			$hki = (int) preg_replace('/\D/', '', input('harga_hki'));
+			if ($hki > 0) {
+				simpan_pengaturan('harga_hki', (string) $hki);
+			}
 			foreach (array_keys(IDENTITAS) as $k) {
 				if (!isset($_POST['situs_' . $k])) {
 					continue;
@@ -587,6 +594,11 @@ function admin_pengaturan(bool $post): void
 			<label for="margin_cetak">Margin harga cetak per buku (%)</label>
 			<input id="margin_cetak" name="margin_cetak" type="number" min="0" max="500" value="' . e((string) margin_cetak()) . '">
 			<p class="catatan">Harga paket berlaku untuk buku A5, HVS hitam putih, soft cover, sampai batas halaman di atas. Buku yang lebih tebal atau spesifikasinya lain dikenai selisih biaya cetak. Harga cetak per buku = taksiran dari Harga Cetak + margin.</p>
+		</fieldset>
+		<fieldset><legend>Layanan HKI</legend>
+			<label for="harga_hki">Biaya layanan HKI saja (Rp)</label>
+			<input id="harga_hki" name="harga_hki" inputmode="numeric" data-rupiah value="' . e((string) harga_hki()) . '">
+			<p class="catatan">Untuk pelanggan yang hanya mengajukan HKI, atau penulis paket selain Pustaka. HKI di Paket Pustaka tetap tanpa biaya tambahan.</p>
 		</fieldset>
 		<fieldset><legend>Identitas website dan footer</legend>
 			' . implode('', array_map(fn ($k, $d) => '<label for="situs_' . $k . '">' . e($d[0]) . '</label>' . ($d[1] === 'textarea'

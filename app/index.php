@@ -16,6 +16,7 @@ require __DIR__ . '/halaman/pasang.php';
 require __DIR__ . '/halaman/notifikasi.php';
 require __DIR__ . '/halaman/pesanan.php';
 require __DIR__ . '/halaman/keuangan.php';
+require __DIR__ . '/halaman/hki.php';
 
 date_default_timezone_set('Asia/Jakarta');
 header('X-Frame-Options: SAMEORIGIN');
@@ -57,6 +58,13 @@ $rute = [
 	'#^/akun/pengajuan/(\d+)$#'             => 'pengaju_detail',
 	'#^/akun/pengajuan/(\d+)/ubah$#'        => 'pengaju_ubah',
 	'#^/berkas/(\d+)$#'                     => 'unduh_berkas',
+	'#^/akun/hki$#'                         => 'hki_daftar',
+	'#^/akun/hki/baru$#'                    => 'hki_baru',
+	'#^/akun/hki/(\d+)$#'                   => 'hki_detail',
+	'#^/akun/hki/(\d+)/ubah$#'              => 'hki_ubah',
+	'#^/hki/berkas/(\d+)$#'                 => 'unduh_berkas_hki',
+	'#^/admin/hki$#'                        => 'admin_hki',
+	'#^/admin/hki/(\d+)$#'                  => 'admin_hki_detail',
 	'#^/notifikasi$#'                       => 'halaman_notifikasi',
 	'#^/notifikasi/jumlah$#'                => 'notifikasi_jumlah',
 	'#^/notifikasi/(\d+)$#'                 => 'notifikasi_buka',
