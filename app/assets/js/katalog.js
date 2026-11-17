@@ -42,7 +42,19 @@
 			? 'Menampilkan ' + tampil + ' dari ' + data.length + ' buku'
 			: 'Menampilkan ' + data.length + ' buku';
 		kosong.hidden = tampil > 0;
+		chip.forEach(function (c) {
+			c.setAttribute('aria-pressed', c.getAttribute('data-kategori') === kategori ? 'true' : 'false');
+		});
 	}
+
+	// Tombol kategori cepat (chip) di atas daftar buku.
+	var chip = Array.prototype.slice.call(document.querySelectorAll('.chip[data-kategori]'));
+	chip.forEach(function (c) {
+		c.addEventListener('click', function () {
+			form.elements.kategori.value = c.getAttribute('data-kategori');
+			terapkan();
+		});
+	});
 
 	// Isi form dari alamat (?judul=...), supaya hasil pencarian bisa dibagikan.
 	var params = new URLSearchParams(location.search);

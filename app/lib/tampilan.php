@@ -34,6 +34,10 @@ const IKON = [
 	'tambah'    => '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
 	'lainnya'   => '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
 	'hki'       => '<circle cx="12" cy="9" r="6"/><path d="m9.5 14.5-1.5 7.5 4-2 4 2-1.5-7.5"/><path d="M10 9h4"/>',
+	'surat'     => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+	'kirim'     => '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/>',
+	'perisai'   => '<path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+	'panah'     => '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	'unduh'     => '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
 ];
 
@@ -87,10 +91,18 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 		$tautan .= '<li><a href="' . e($href) . '">' . e($t['label']) . '</a></li>';
 	}
 
+	$jelajah = '';
+	foreach ($SITUS['menu'] as $m) {
+		if (isset($m['layanan']) && !layanan_tampil($m['layanan'])) {
+			continue;
+		}
+		$jelajah .= '<li><a href="' . e(url($m['url'])) . '">' . e($m['label']) . '</a></li>';
+	}
+
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=18';
+	$css = url('/assets/css/gaya.css') . '?v=19';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -108,39 +120,47 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 <meta name="theme-color" content="' . e($SITUS['warna_utama']) . '">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="' . e($css) . '">
 <style>:root{--warna-utama:' . e($SITUS['warna_utama']) . '}</style>
 ' . ($opsi['kepala'] ?? '') . '</head>
 <body class="' . e($opsi['kelas'] ?? '') . '">
 <a class="lewati" href="#isi">Langsung ke isi</a>
 <header class="kepala">
-	<div class="wadah kepala__merek">
+	<div class="wadah kepala__baris">
 		<a class="merek" href="' . e(url('/')) . '">
 			<img class="merek__logo" src="' . e(url('/assets/img/logo-ikon.png')) . '" alt="" width="292" height="235">
-			<span class="merek__nama">' . e($SITUS['nama']) . '</span>
-			<span class="merek__tagline">' . e($SITUS['tagline']) . '</span>
+			<span class="merek__teks"><span class="merek__nama">' . e($SITUS['nama']) . '</span><span class="merek__tagline">' . e($SITUS['tagline']) . '</span></span>
 		</a>
-	</div>
-	<nav class="navigasi" aria-label="Menu utama">
-		<div class="wadah navigasi__isi">
-			<details class="navigasi__lipat"><summary>Menu</summary><ul>' . $menu . '</ul></details>
+		<nav class="navigasi" aria-label="Menu utama">
 			<ul class="navigasi__menu">' . $menu . '</ul>
+		</nav>
+		<div class="kepala__aksi">
+			<a class="navigasi__cari" href="' . e(url('/#katalog')) . '" aria-label="Cari buku" title="Cari buku">' . ikon('cari') . '</a>
 			' . $akun . '
-			<a class="navigasi__cari" href="' . e(url('/#katalog')) . '" aria-label="Cari buku">' . ikon('cari') . '</a>
+			<details class="navigasi__lipat"><summary aria-label="Buka menu"><span class="garis-menu" aria-hidden="true"></span></summary><ul>' . $menu . '</ul></details>
 		</div>
-	</nav>
+	</div>
 </header>
 <main id="isi" class="wadah">
 ' . ($panel !== '' ? '<div class="tata-panel">' . $panel . '<div class="tata-panel__isi">' . $pesan . $isi . '</div></div>' : $pesan . $isi) . '
 </main>
 <footer class="kaki">
 	<div class="wadah kaki__kolom">
-		<section><h2>' . e($SITUS['nama']) . '</h2><p>' . e($SITUS['deskripsi']) . '</p></section>
-		<section><h2>Tautan</h2><ul>' . $tautan . '</ul></section>
-		<section><h2>Kontak Kami</h2><p>' . e($SITUS['alamat']) . '<br>WhatsApp: <a href="' . e(wa_link()) . '">' . e($SITUS['whatsapp_tampil']) . '</a><br>Email: <a href="mailto:' . e($SITUS['email']) . '">' . e($SITUS['email']) . '</a></p></section>
+		<section class="kaki__merek">
+			<a class="merek merek--kaki" href="' . e(url('/')) . '"><img class="merek__logo" src="' . e(url('/assets/img/logo-ikon.png')) . '" alt="" width="292" height="235" loading="lazy"><span class="merek__nama">' . e($SITUS['nama']) . '</span></a>
+			<p>' . e($SITUS['deskripsi']) . '</p>
+		</section>
+		<section><h2>Jelajahi</h2><ul>' . $jelajah . '</ul></section>
+		<section><h2>Informasi</h2><ul>' . $tautan . '</ul></section>
+		<section class="kaki__kontak"><h2>Hubungi Kami</h2>
+			<p>' . ikon('penerbit') . '<span>' . e($SITUS['alamat']) . '</span></p>
+			<p>' . ikon('wa') . '<a href="' . e(wa_link()) . '">' . e($SITUS['whatsapp_tampil']) . '</a></p>
+			<p>' . ikon('surat') . '<a href="mailto:' . e($SITUS['email']) . '">' . e($SITUS['email']) . '</a></p>
+			<p>' . ikon('status') . '<span>' . e($SITUS['jam_layanan']) . '</span></p>
+		</section>
 	</div>
-	<p class="kaki__hak">© ' . $tahun . ' ' . e($SITUS['nama']) . '. Seluruh hak cipta dilindungi.</p>
+	<div class="kaki__hak"><div class="wadah">© ' . $tahun . ' ' . e($SITUS['nama']) . '. Seluruh hak cipta dilindungi.</div></div>
 </footer>
 ' . ($u ? '<script src="' . e(url('/assets/js/lonceng.js')) . '" defer></script><script src="' . e(url('/assets/js/rupiah.js')) . '?v=1" defer></script>' : '') . '
 </body>
