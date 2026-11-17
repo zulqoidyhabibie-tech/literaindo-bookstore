@@ -68,7 +68,7 @@ function berat_pesanan(array $buku, int $jumlah): int
 /** Email ke pembeli, selalu berisi link halaman pesanannya. */
 function email_pesanan(array $o, string $judul, string $isi): void
 {
-	kirim_email($o['email'], $judul . ' · ' . $o['kode'], "Halo {$o['nama']},\n\n$isi\n\nLihat pesanan Anda (link pribadi, jangan dibagikan):\n" . link_pesanan($o, true) . "\n\nSalam,\nLiteraindo Press");
+	kirim_email($o['email'], $judul . ' · ' . $o['kode'], "Halo {$o['nama']},\n\n$isi\n\nLihat pesanan Anda (link pribadi, jangan dibagikan):\n" . link_pesanan($o, true) . "\n\nSalam,\n" . $GLOBALS['SITUS']['nama']);
 }
 
 function ubah_status_pesanan(array $o, string $baru, string $info = ''): void
@@ -292,7 +292,7 @@ function halaman_pesanan(bool $post, string $kode): void
 		' . ($o['format'] === 'cetak' ? '<div><dt>Alamat</dt><dd>' . nl2br(e($o['alamat'])) . ($o['kode_pos'] ? ' ' . e($o['kode_pos']) : '') . '</dd></div>' : '') . '
 		<div><dt>Dipesan</dt><dd>' . e(tanggal($o['dibuat'])) . '</dd></div>
 	</dl>
-	<p class="catatan">Halaman ini pribadi. Jangan bagikan link-nya. Bila link hilang, buka <a href="' . e(url('/pesanan')) . '">Cek Pesanan</a> dengan kode pesanan dan email Anda. Ada pertanyaan? <a href="' . e(wa_link('Halo Literaindo Press, saya ingin menanyakan pesanan ' . $o['kode'] . '.')) . '">Hubungi kami via WhatsApp</a>.</p>
+	<p class="catatan">Halaman ini pribadi. Jangan bagikan link-nya. Bila link hilang, buka <a href="' . e(url('/pesanan')) . '">Cek Pesanan</a> dengan kode pesanan dan email Anda. Ada pertanyaan? <a href="' . e(wa_link('Halo ' . $GLOBALS['SITUS']['nama'] . ', saya ingin menanyakan pesanan ' . $o['kode'] . '.')) . '">Hubungi kami via WhatsApp</a>.</p>
 </section>';
 	tampil('Pesanan ' . $o['kode'], $isi, ['kelas' => 'halaman-pesanan', 'kepala' => '<meta name="robots" content="noindex">']);
 }

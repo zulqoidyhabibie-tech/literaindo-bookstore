@@ -1,6 +1,6 @@
-# Literaindo Press
+# CV. Master Literasi Indonesia
 
-Website resmi Literaindo Press (https://bookstore.literaindo.com):
+Website resmi penerbit CV. Master Literasi Indonesia (https://bookstore.literaindo.com):
 
 - **Katalog publik**: daftar buku dengan filter, halaman detail tiap buku (link tetap untuk pengajuan ISBN), pemesanan via WhatsApp dan QRIS BTN.
 - **Akun penulis (pengaju)**: daftar, ajukan naskah, unggah berkas, bayar biaya awal dan pelunasan via QRIS, pantau status, terima email setiap perubahan status.
@@ -73,3 +73,11 @@ Karena repo privat, salin **SSH key** dari halaman GIT hPanel ke GitHub →
 Settings → Deploy keys (cukup akses baca). Untuk pembaruan otomatis, aktifkan
 **Auto Deployment** di hPanel dan simpan URL webhook-nya sebagai secret
 `HOSTINGER_WEBHOOK` di GitHub → Settings → Secrets and variables → Actions.
+
+## Halaman layanan (syarat Perpusnas)
+
+Perpustakaan Nasional melarang website penerbit mempromosikan jasa/fasilitas
+pencantuman ISBN. Karena itu halaman **Layanan Penerbitan**, **Info ISBN**, dan
+**Layanan HKI**, beserta pendaftaran akun mandiri, disembunyikan secara bawaan
+(alamatnya menampilkan 404; admin yang masuk tetap bisa melihatnya). Semuanya
+bisa dinyalakan lagi di **Admin → Pengaturan → Halaman layanan publik**.

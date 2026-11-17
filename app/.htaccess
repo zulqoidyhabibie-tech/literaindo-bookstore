@@ -1,4 +1,4 @@
-# Literaindo Press: pengaturan server (Hostinger/LiteSpeed/Apache)
+# Website penerbit: pengaturan server (Hostinger/LiteSpeed/Apache)
 Options -Indexes
 DirectoryIndex index.php
 

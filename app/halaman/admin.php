@@ -96,7 +96,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				notif_pengajuan($p, 'Pesan dari admin: ' . mb_substr(input('isi'), 0, 200));
 				q('UPDATE pengajuan SET diubah = ? WHERE id = ?', [sekarang(), $pid]);
 				$pemilik = satu('SELECT * FROM pengguna WHERE id = ?', [$p['pengguna_id']]);
-				kirim_email($pemilik['email'], 'Pesan baru untuk pengajuan "' . $p['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin Literaindo Press mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/pengajuan/$pid"));
+				kirim_email($pemilik['email'], 'Pesan baru untuk pengajuan "' . $p['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin " . $GLOBALS['SITUS']['nama'] . " mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/pengajuan/$pid"));
 				pesan('Pesan terkirim.');
 			} elseif (in_array($aksi, ['terima_bayar', 'tolak_bayar'], true) && in_array($s, ['VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2'], true)) {
 				verifikasi_bayar($p, $aksi === 'terima_bayar', $catatan);
@@ -523,14 +523,14 @@ function admin_pengguna(bool $post): void
 			. '</td><td><details><summary>Atur ulang sandi</summary><form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="sandi"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="sandi-' . $r['id'] . '">Sandi baru</label><input type="text" id="sandi-' . $r['id'] . '" name="sandi" minlength="8" placeholder="Sandi baru"><button class="tombol tombol--kecil" type="submit">Ganti</button></form></details></td></tr>';
 	}
 	$isi = '<section class="panel"><h1>Pengguna</h1>
-	<details class="kotak-langkah"><summary>Tambah akun (keuangan / admin)</summary>
+	<details class="kotak-langkah"><summary>Tambah akun (penulis / keuangan / admin)</summary>
 		<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="tambah">
 			<div class="kolom-2">
 				<div><label for="t-nama">Nama</label><input id="t-nama" name="nama" required></div>
 				<div><label for="t-email">Email (untuk masuk)</label><input type="email" id="t-email" name="email" required></div>
 				<div><label for="t-wa">Nomor WhatsApp</label><input id="t-wa" name="whatsapp" inputmode="tel"></div>
 				<div><label for="t-sandi">Kata sandi awal (min. 8 karakter)</label><input type="text" id="t-sandi" name="sandi" minlength="8" required></div>
-				<div><label for="t-peran">Peran</label><select id="t-peran" name="peran"><option value="keuangan">Keuangan: lihat &amp; unduh data transaksi</option><option value="admin">Admin: akses penuh</option></select></div>
+				<div><label for="t-peran">Peran</label><select id="t-peran" name="peran"><option value="pengaju">Penulis: ajukan naskah dan pantau statusnya</option><option value="keuangan">Keuangan: lihat &amp; unduh data transaksi</option><option value="admin">Admin: akses penuh</option></select></div>
 			</div>
 			<button type="submit" class="tombol">Buat Akun</button>
 		</form>
@@ -561,6 +561,9 @@ function admin_pengaturan(bool $post): void
 			$hki = (int) preg_replace('/\D/', '', input('harga_hki'));
 			if ($hki > 0) {
 				simpan_pengaturan('harga_hki', (string) $hki);
+			}
+			foreach (array_keys(LAYANAN_PUBLIK) as $jenis) {
+				simpan_pengaturan('tampil_layanan_' . $jenis, empty($_POST['tampil_layanan_' . $jenis]) ? '0' : '1');
 			}
 			foreach (array_keys(IDENTITAS) as $k) {
 				if (!isset($_POST['situs_' . $k])) {
@@ -599,6 +602,10 @@ function admin_pengaturan(bool $post): void
 			<label for="harga_hki">Biaya layanan HKI saja (Rp)</label>
 			<input id="harga_hki" name="harga_hki" inputmode="numeric" data-rupiah value="' . e((string) harga_hki()) . '">
 			<p class="catatan">Untuk pelanggan yang hanya mengajukan HKI, atau penulis paket selain Pustaka. HKI di Paket Pustaka tetap tanpa biaya tambahan.</p>
+		</fieldset>
+		<fieldset><legend>Halaman layanan publik</legend>
+			<p class="catatan">Perpustakaan Nasional melarang website penerbit mempromosikan jasa/fasilitas pencantuman ISBN. Karena itu halaman di bawah <strong>disembunyikan</strong> dari menu dan footer, dan alamatnya menampilkan "Halaman tidak ditemukan". Panel penulis, admin, dan keuangan tetap berjalan. Selama semuanya disembunyikan, pendaftaran akun mandiri ditutup; buat akun penulis di menu <a href="' . e(url('/admin/pengguna')) . '">Pengguna</a>.</p>
+			' . implode('', array_map(fn ($jenis, $d) => '<label class="centang"><input type="checkbox" name="tampil_layanan_' . $jenis . '" value="1"' . (layanan_tampil($jenis) ? ' checked' : '') . '> Tampilkan: ' . e($d[0]) . '</label>', array_keys(LAYANAN_PUBLIK), LAYANAN_PUBLIK)) . '
 		</fieldset>
 		<fieldset><legend>Identitas website dan footer</legend>
 			' . implode('', array_map(fn ($k, $d) => '<label for="situs_' . $k . '">' . e($d[0]) . '</label>' . ($d[1] === 'textarea'
@@ -837,7 +844,9 @@ function admin_halaman(bool $post): void
 	$baris = '';
 	foreach (daftar_halaman_konten() as $slug => $judul) {
 		$ubah = pengaturan('konten_' . $slug) !== '';
-		$baris .= '<tr><td><strong>' . e($judul) . '</strong><br><span class="catatan">/' . e($slug) . '/</span></td><td>' . ($ubah ? '<span class="lencana lencana--proses">Sudah diubah</span>' : '<span class="catatan">Teks bawaan</span>') . '</td>'
+		$jenis = jenis_layanan_halaman($slug);
+		$sembunyi = $jenis !== '' && !layanan_tampil($jenis);
+		$baris .= '<tr><td><strong>' . e($judul) . '</strong><br><span class="catatan">/' . e($slug) . '/</span></td><td>' . ($ubah ? '<span class="lencana lencana--proses">Sudah diubah</span>' : '<span class="catatan">Teks bawaan</span>') . ($sembunyi ? ' <span class="lencana lencana--tolak">Disembunyikan</span>' : '') . '</td>'
 			. '<td style="text-align:right;white-space:nowrap"><a class="tombol tombol--kecil" href="' . e(url('/admin/halaman/' . $slug)) . '">Ubah</a> <a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/' . $slug . '/')) . '" target="_blank">Lihat</a></td></tr>';
 	}
 	$isi = '<section class="panel"><h1>Halaman Website</h1>

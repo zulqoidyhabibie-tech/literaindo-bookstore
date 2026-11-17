@@ -32,7 +32,7 @@ function pengaju_daftar(bool $post): void
 	}
 	$daftar = semua('SELECT * FROM pengajuan WHERE pengguna_id = ? ORDER BY diubah DESC', [$u['id']]);
 	if (!$daftar) {
-		$isi = '<section class="panel kosong"><h1>Belum ada pengajuan</h1><p>Ajukan naskah buku Anda untuk diterbitkan dan diurus ISBN-nya oleh Literaindo Press.</p><p><a class="tombol" href="' . e(url('/akun/pengajuan/baru')) . '">Ajukan Buku Baru</a></p></section>';
+		$isi = '<section class="panel kosong"><h1>Belum ada pengajuan</h1><p>Ajukan naskah buku Anda untuk diterbitkan oleh ' . e($GLOBALS['SITUS']['nama']) . '.</p><p><a class="tombol" href="' . e(url('/akun/pengajuan/baru')) . '">Ajukan Buku Baru</a></p></section>';
 	} else {
 		$baris = '';
 		foreach ($daftar as $p) {
@@ -248,7 +248,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 				<ul>
 					<li><span>2</span> Perpustakaan Nasional RI</li>
 					<li><span>1</span> Perpustakaan Daerah (Perpusda)</li>
-					<li><span>1</span> Arsip penerbit (Literaindo Press)</li>
+					<li><span>1</span> Arsip penerbit (' . e($GLOBALS['SITUS']['nama']) . ')</li>
 					<li><span>1</span> Untuk penulis</li>
 				</ul>
 				<p class="catatan">Sisanya untuk penulis. Eksemplar di atas jumlah paket dikenai biaya cetak per buku.</p>
@@ -259,7 +259,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			<label for="naskah">' . ($revisi ? 'Naskah hasil revisi *' : 'Naskah *') . ' <span class="catatan">(PDF/DOC/DOCX, maks. 30 MB)</span></label>
 			<input type="file" id="naskah" name="naskah" accept=".pdf,.doc,.docx">
 			<label for="pernyataan">Surat pernyataan keaslian naskah * <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label>
-			<p class="contoh-unduh">' . ikon('unduh') . '<span>Belum punya suratnya? Unduh contoh: <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.docx')) . '" download>Word (bisa diisi)</a> · <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.pdf')) . '" download>PDF (untuk dicetak)</a>. Format resmi Perpusnas. Isi data Anda, tanda tangani kolom <strong>Penulis</strong> di atas meterai Rp10.000 (setiap penulis menandatangani), lalu pindai/foto dan unggah di sini. Kolom Penanggung jawab Penerbit akan ditandatangani oleh Literaindo Press.</span></p>
+			<p class="contoh-unduh">' . ikon('unduh') . '<span>Belum punya suratnya? Unduh contoh: <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.docx')) . '" download>Word (bisa diisi)</a> · <a href="' . e(url('/assets/unduh/surat-pernyataan-keaslian-naskah.pdf')) . '" download>PDF (untuk dicetak)</a>. Format resmi Perpusnas. Isi data Anda, tanda tangani kolom <strong>Penulis</strong> di atas meterai Rp10.000 (setiap penulis menandatangani), lalu pindai/foto dan unggah di sini. Kolom Penanggung jawab Penerbit akan ditandatangani oleh ' . e($GLOBALS['SITUS']['nama']) . '.</span></p>
 			<input type="file" id="pernyataan" name="pernyataan" accept=".pdf,.jpg,.jpeg,.png">
 			<label for="jenis_karya">Jenis karya *</label>
 			<select id="jenis_karya" name="jenis_karya" data-jenis-karya>' . implode('', array_map(fn ($k, $j) => '<option value="' . $k . '"' . ($k === $v['jenis_karya'] ? ' selected' : '') . '>' . e($j[0]) . '</option>', array_keys(JENIS_KARYA), JENIS_KARYA)) . '</select>
@@ -267,7 +267,7 @@ function formulir_pengajuan(array $u, ?array $p, bool $post): void
 			<label for="sampul">Desain sampul siap cetak * <span class="catatan">(JPG/PNG/WebP, maks. 10 MB)</span></label>
 			<input type="file" id="sampul" name="sampul" accept=".jpg,.jpeg,.png,.webp">
 		</fieldset>
-		<label class="centang siap-terbit"><input type="checkbox" name="siap_terbit" value="1"> Saya menyatakan naskah dan sampul yang diunggah sudah <strong>siap terbit</strong> (sudah disunting, di-layout, dan didesain) dan tidak memerlukan penyuntingan atau tata letak dari Literaindo Press.</label>
+		<label class="centang siap-terbit"><input type="checkbox" name="siap_terbit" value="1"> Saya menyatakan naskah dan sampul yang diunggah sudah <strong>siap terbit</strong> (sudah disunting, di-layout, dan didesain) dan tidak memerlukan penyuntingan atau tata letak dari ' . e($GLOBALS['SITUS']['nama']) . '.</label>
 		<div class="formulir__tombol">
 			<button type="submit" name="aksi" value="kirim" class="tombol">' . ($revisi ? 'Kirim Revisi' : 'Kirim Pengajuan') . '</button>
 			' . ($revisi ? '' : '<button type="submit" name="aksi" value="draf" class="tombol tombol--kedua">Simpan Draf</button>') . '
@@ -323,7 +323,7 @@ function riwayat(int $id): string
 {
 	$out = '';
 	foreach (semua('SELECT c.*, u.nama, u.peran FROM catatan c LEFT JOIN pengguna u ON u.id = c.pengguna_id WHERE c.pengajuan_id = ? ORDER BY c.id DESC', [$id]) as $c) {
-		$siapa = $c['sistem'] ? 'Sistem' : (['admin' => 'Admin Literaindo', 'keuangan' => 'Keuangan Literaindo'][$c['peran']] ?? $c['nama']);
+		$siapa = $c['sistem'] ? 'Sistem' : (['admin' => 'Admin Penerbit', 'keuangan' => 'Keuangan Penerbit'][$c['peran']] ?? $c['nama']);
 		$out .= '<li class="' . ($c['sistem'] ? 'riwayat--sistem' : ($c['peran'] === 'admin' ? 'riwayat--admin' : '')) . '"><span class="riwayat__siapa">' . e((string) $siapa) . ' · ' . e(tanggal($c['dibuat'])) . '</span><p>' . nl2br(e($c['isi'])) . '</p></li>';
 	}
 	return '<ul class="riwayat">' . $out . '</ul>';

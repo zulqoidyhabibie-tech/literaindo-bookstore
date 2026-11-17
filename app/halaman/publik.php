@@ -183,6 +183,10 @@ function halaman_konten(bool $post, string $slug): void
 	if (!is_file($file)) {
 		tidak_ditemukan();
 	}
+	$jenis = jenis_layanan_halaman($slug);
+	if ($jenis !== '' && !layanan_tampil($jenis) && (pengguna()['peran'] ?? '') !== 'admin') {
+		tidak_ditemukan(); // halaman layanan disembunyikan dari publik (Pengaturan)
+	}
 	$mentah = (string) file_get_contents($file);
 	preg_match('/<!--\s*judul:\s*(.+?)\s*-->/', $mentah, $m);
 	$judul = $m[1] ?? $slug;
@@ -190,7 +194,11 @@ function halaman_konten(bool $post, string $slug): void
 	if ($ubahan !== '') {
 		$mentah = $ubahan;
 	}
+	// Syarat penerbitan hanya untuk publik bila layanan penerbitan ditampilkan; penulis yang masuk tetap bisa membacanya.
+	$bagian = layanan_tampil('terbit') || pengguna() ? (string) file_get_contents(APP_DIR . '/konten/bagian/syarat-penerbitan.html') : '';
+	$mentah = str_replace('{{syarat_penerbitan}}', $bagian, $mentah);
 	$ganti = [
+		'nama' => e($SITUS['nama']),
 		'badan_usaha' => e($SITUS['badan_usaha']),
 		'alamat' => e($SITUS['alamat']),
 		'email' => e($SITUS['email']),

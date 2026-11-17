@@ -107,7 +107,7 @@ function halaman_pasang(bool $post): void
 		</fieldset>';
 
 	$isi = '<section class="panel panel--sempit">
-	<h1>Pasang Panel Literaindo Press</h1>
+	<h1>Pasang Panel Penerbit</h1>
 	<p class="catatan">Langkah ini hanya dilakukan sekali. Setelah selesai, halaman ini otomatis tertutup.</p>
 	' . $daftar_galat . '
 	<form method="post" class="formulir" autocomplete="off">' . csrf_field() . $bagian_db . '

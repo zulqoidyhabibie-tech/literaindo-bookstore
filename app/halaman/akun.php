@@ -29,7 +29,7 @@ function halaman_masuk(bool $post): void
 	}
 	$isi = '<section class="panel panel--sempit">
 	<h1>Masuk</h1>
-	<p class="catatan">Untuk penulis yang mengajukan penerbitan buku dan admin Literaindo Press.</p>
+	<p class="catatan">Masuk ke akun Anda di ' . e($GLOBALS['SITUS']['nama']) . '.</p>
 	' . ($galat ? '<p class="pesan pesan--galat" role="alert">' . e($galat) . '</p>' : '') . '
 	<form method="post" class="formulir">' . csrf_field() . '
 		<label for="email">Email</label>
@@ -38,16 +38,25 @@ function halaman_masuk(bool $post): void
 		<input type="password" id="sandi" name="sandi" required autocomplete="current-password">
 		<button type="submit" class="tombol">Masuk</button>
 	</form>
-	<p>Belum punya akun? <a href="' . e(url('/daftar')) . '">Daftar sebagai penulis</a></p>
-	<p class="catatan">Lupa kata sandi? Hubungi admin melalui <a href="' . e(wa_link('Halo Literaindo Press, saya lupa kata sandi akun saya.')) . '">WhatsApp</a>.</p>
+	' . (pendaftaran_dibuka() ? '<p>Belum punya akun? <a href="' . e(url('/daftar')) . '">Daftar</a></p>' : '') . '
+	<p class="catatan">Lupa kata sandi? Hubungi admin melalui <a href="' . e(wa_link('Halo ' . $GLOBALS['SITUS']['nama'] . ', saya lupa kata sandi akun saya.')) . '">WhatsApp</a>.</p>
 </section>';
 	tampil('Masuk', $isi);
+}
+
+/** Pendaftaran akun mandiri hanya dibuka bila halaman layanan ditampilkan; admin tetap bisa membuat akun di menu Pengguna. */
+function pendaftaran_dibuka(): bool
+{
+	return layanan_tampil('terbit') || layanan_tampil('hki');
 }
 
 function halaman_daftar(bool $post): void
 {
 	if (pengguna()) {
 		arahkan('/akun');
+	}
+	if (!pendaftaran_dibuka()) {
+		tidak_ditemukan();
 	}
 	$v = ['nama' => '', 'email' => '', 'whatsapp' => ''];
 	$galat = [];
@@ -78,7 +87,7 @@ function halaman_daftar(bool $post): void
 			q('INSERT INTO pengguna (nama, email, whatsapp, sandi, peran, dibuat) VALUES (?, ?, ?, ?, ?, ?)', [$v['nama'], $v['email'], $v['whatsapp'], password_hash($sandi, PASSWORD_DEFAULT), 'pengaju', sekarang()]);
 			session_regenerate_id(true);
 			$_SESSION['uid'] = (int) db()->lastInsertId();
-			kirim_email($v['email'], 'Selamat datang di Literaindo Press', "Halo {$v['nama']},\n\nAkun Anda sudah aktif. Ajukan naskah buku Anda di: " . url_absolut('/akun/pengajuan/baru') . "\n\nSalam,\nLiteraindo Press");
+			kirim_email($v['email'], 'Selamat datang di ' . $GLOBALS['SITUS']['nama'], "Halo {$v['nama']},\n\nAkun Anda sudah aktif. Ajukan naskah buku Anda di: " . url_absolut('/akun/pengajuan/baru') . "\n\nSalam,\n" . $GLOBALS['SITUS']['nama']);
 			notif_admin('Penulis baru mendaftar: ' . $v['nama'] . ' (' . $v['email'] . ')', '/admin/pengguna');
 			$kembali = (string) ($_SESSION['kembali'] ?? '');
 			unset($_SESSION['kembali']);
@@ -93,8 +102,8 @@ function halaman_daftar(bool $post): void
 	}
 	$daftar_galat = $galat ? '<ul class="pesan pesan--galat" role="alert">' . implode('', array_map(fn ($g) => '<li>' . e($g) . '</li>', $galat)) . '</ul>' : '';
 	$isi = '<section class="panel panel--sempit">
-	<h1>Daftar sebagai Penulis</h1>
-	<p class="catatan">Buat akun untuk mengajukan penerbitan buku dan ISBN, membayar, serta memantau status naskah Anda.</p>
+	<h1>Daftar Akun</h1>
+	<p class="catatan">Buat akun untuk mengajukan naskah atau layanan, membayar, serta memantau statusnya.</p>
 	' . $daftar_galat . '
 	<form method="post" class="formulir">' . csrf_field() . '
 		<label for="nama">Nama lengkap (beserta gelar)</label>

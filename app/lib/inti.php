@@ -104,6 +104,7 @@ function simpan_pengaturan(string $k, string $v): void
 
 /** Identitas website yang bisa diubah admin di Pengaturan (menimpa app/data/situs.json). */
 const IDENTITAS = [
+	'nama'            => ['Nama penerbit (judul situs, footer, email)', 'input'],
 	'tagline'         => ['Tulisan di bawah logo', 'input'],
 	'deskripsi'       => ['Tentang singkat (tampil di footer)', 'textarea'],
 	'badan_usaha'     => ['Nama badan usaha', 'input'],
@@ -112,6 +113,38 @@ const IDENTITAS = [
 	'whatsapp_tampil' => ['Nomor WhatsApp', 'input'],
 	'jam_layanan'     => ['Jam layanan', 'input'],
 ];
+
+/**
+ * Halaman publik yang mempromosikan layanan (jasa penerbitan/ISBN, HKI).
+ * Disembunyikan secara bawaan karena Perpusnas melarang website penerbit
+ * menawarkan jasa/fasilitas pencantuman ISBN. Bisa dinyalakan lagi di
+ * Admin → Pengaturan → Halaman layanan publik.
+ */
+const LAYANAN_PUBLIK = [
+	'terbit' => ['Layanan Penerbitan, Info ISBN, paket dan harga penerbitan, pendaftaran penulis', ['layanan-penerbitan', 'info-isbn']],
+	'hki'    => ['Layanan HKI (pencatatan hak cipta)', ['layanan-hki']],
+];
+
+/** Apakah halaman layanan jenis ini boleh tampil untuk publik? */
+function layanan_tampil(string $jenis): bool
+{
+	try {
+		return config() && pengaturan('tampil_layanan_' . $jenis, '0') === '1';
+	} catch (Throwable) {
+		return false;
+	}
+}
+
+/** Jenis layanan sebuah halaman konten, atau '' bila bukan halaman layanan. */
+function jenis_layanan_halaman(string $slug): string
+{
+	foreach (LAYANAN_PUBLIK as $jenis => [, $slugs]) {
+		if (in_array($slug, $slugs, true)) {
+			return $jenis;
+		}
+	}
+	return '';
+}
 
 function terapkan_identitas(): void
 {
@@ -312,7 +345,7 @@ function ubah_status(array $p, string $baru, ?string $keterangan = null): void
 			'Status pengajuan "' . $p['judul'] . '": ' . STATUS[$baru][0],
 			"Halo {$pemilik['nama']},\n\nStatus pengajuan buku \"{$p['judul']}\" sekarang: " . STATUS[$baru][0] . ".\n" . STATUS[$baru][1] . ".\n"
 			. ($keterangan ? "\nCatatan: $keterangan\n" : '')
-			. "\nLihat detailnya di: " . url_absolut('/akun/pengajuan/' . $p['id']) . "\n\nSalam,\nLiteraindo Press"
+			. "\nLihat detailnya di: " . url_absolut('/akun/pengajuan/' . $p['id']) . "\n\nSalam,\n" . $GLOBALS['SITUS']['nama']
 		);
 	}
 }
@@ -366,7 +399,8 @@ function kirim_email(string $ke, string $judul, string $isi): void
 	if ($dari === '' || !function_exists('mail')) {
 		return;
 	}
-	$header = "From: Literaindo Press <$dari>\r\nContent-Type: text/plain; charset=UTF-8";
+	$nama = '=?UTF-8?B?' . base64_encode((string) ($GLOBALS['SITUS']['nama'] ?? '')) . '?=';
+	$header = "From: $nama <$dari>\r\nContent-Type: text/plain; charset=UTF-8";
 	@mail($ke, '=?UTF-8?B?' . base64_encode($judul) . '?=', $isi, $header);
 }
 
