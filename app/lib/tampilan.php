@@ -62,6 +62,9 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 
 	$menu = '';
 	foreach ($SITUS['menu'] as $m) {
+		if (isset($m['layanan']) && !layanan_tampil($m['layanan'])) {
+			continue;
+		}
 		$aktif = $m['url'] === $path || ($m['url'] === '/' && str_starts_with((string) $path, '/buku/'));
 		$menu .= '<li><a href="' . e(url($m['url'])) . '"' . ($aktif ? ' aria-current="page"' : '') . '>' . e($m['label']) . '</a></li>';
 	}
@@ -77,6 +80,9 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 
 	$tautan = '';
 	foreach ($SITUS['tautan_terkait'] as $t) {
+		if (isset($t['layanan']) && !layanan_tampil($t['layanan'])) {
+			continue;
+		}
 		$href = str_starts_with($t['url'], '/') ? url($t['url']) : $t['url'];
 		$tautan .= '<li><a href="' . e($href) . '">' . e($t['label']) . '</a></li>';
 	}
@@ -84,7 +90,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=17';
+	$css = url('/assets/css/gaya.css') . '?v=18';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -111,7 +117,8 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 <header class="kepala">
 	<div class="wadah kepala__merek">
 		<a class="merek" href="' . e(url('/')) . '">
-			<img class="merek__logo" src="' . e(url('/assets/img/logo-literaindo.png')) . '" alt="' . e($SITUS['nama']) . '" width="800" height="235">
+			<img class="merek__logo" src="' . e(url('/assets/img/logo-ikon.png')) . '" alt="" width="292" height="235">
+			<span class="merek__nama">' . e($SITUS['nama']) . '</span>
 			<span class="merek__tagline">' . e($SITUS['tagline']) . '</span>
 		</a>
 	</div>

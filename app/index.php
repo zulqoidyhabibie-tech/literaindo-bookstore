@@ -1,5 +1,5 @@
 <?php
-// Literaindo Press: pintu masuk semua halaman.
+// Website penerbit: pintu masuk semua halaman.
 
 declare(strict_types=1);
 

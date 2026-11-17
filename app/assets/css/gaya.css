@@ -1,4 +1,4 @@
-/* Literaindo Press: gaya website.
+/* Website penerbit: gaya website.
    Warna utama diatur dari data/situs.json (warna_utama). */
 
 :root {
@@ -115,6 +115,15 @@ h3 {
 .merek__logo {
 	width: auto;
 	height: 64px;
+}
+
+.merek__nama {
+	max-width: 13rem;
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1.45rem;
+	font-weight: 700;
+	line-height: 1.15;
+	color: #003c2c;
 }
 
 .merek__tagline {
@@ -1539,6 +1548,10 @@ ul.pesan {
 @media (max-width: 400px) {
 	.merek__logo {
 		height: 46px;
+	}
+
+	.merek__nama {
+		font-size: 1.1rem;
 	}
 
 	.buku__data div {

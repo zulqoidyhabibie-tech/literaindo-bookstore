@@ -117,11 +117,14 @@ function skema_hki(string $driver): array
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 10) {
+	if ($versi >= 11) {
 		return;
 	}
 	if ($versi >= 9) {
-		pastikan_skema_hki();
+		if ($versi < 10) {
+			pastikan_skema_hki();
+		}
+		migrasi_nama_penerbit();
 		return;
 	}
 	if ($versi < 2) {
@@ -172,6 +175,39 @@ function pastikan_skema(): void
 	}
 	simpan_pengaturan('versi_skema', '9');
 	pastikan_skema_hki();
+	migrasi_nama_penerbit();
+}
+
+/**
+ * v11 (17 Nov 2026): nama penerbit menjadi "CV. Master Literasi Indonesia" dan
+ * halaman layanan ISBN/penerbitan disembunyikan (syarat Perpusnas).
+ * - Teks "Literaindo Press" yang tersimpan di Pengaturan/Halaman Website diganti.
+ * - Halaman publik yang sudah diubah admin dan masih mempromosikan layanan
+ *   dikembalikan ke teks bawaan; versi lamanya disimpan di kunci konten_<slug>_lama.
+ */
+function migrasi_nama_penerbit(): void
+{
+	foreach (semua('SELECT k, v FROM pengaturan') as $r) {
+		$v = (string) $r['v'];
+		if (str_contains($v, 'Literaindo Press')) {
+			simpan_pengaturan($r['k'], str_replace('Literaindo Press', 'CV. Master Literasi Indonesia', $v));
+		}
+	}
+	// Nama situs lama yang mungkin disimpan admin sebagai tulisan bawah logo.
+	if (preg_match('/ber-ISBN/i', pengaturan('situs_tagline'))) {
+		simpan_pengaturan('situs_tagline', '');
+	}
+	if (preg_match('/ber-ISBN/i', pengaturan('situs_deskripsi'))) {
+		simpan_pengaturan('situs_deskripsi', '');
+	}
+	foreach (['cara-pemesanan', 'kontak', 'tentang-kami', 'syarat-ketentuan', 'kebijakan-privasi'] as $slug) {
+		$isi = pengaturan('konten_' . $slug);
+		if ($isi !== '' && preg_match('/ISBN|layanan-penerbitan|layanan-hki|url_daftar|ajukan naskah|pengajuan naskah|paket/i', $isi)) {
+			simpan_pengaturan('konten_' . $slug . '_lama', $isi);
+			simpan_pengaturan('konten_' . $slug, '');
+		}
+	}
+	simpan_pengaturan('versi_skema', '11');
 }
 
 /** v10: pengajuan HKI. */

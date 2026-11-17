@@ -136,7 +136,7 @@ function ubah_status_hki(array $h, string $baru, ?string $keterangan = null): vo
 			'Status HKI "' . $h['judul'] . '": ' . STATUS_HKI[$baru][0],
 			"Halo {$pemilik['nama']},\n\nStatus permohonan HKI \"{$h['judul']}\" sekarang: " . STATUS_HKI[$baru][0] . ".\n" . STATUS_HKI[$baru][1] . ".\n"
 			. ($keterangan ? "\nCatatan: $keterangan\n" : '')
-			. "\nLihat detailnya di: " . url_absolut('/akun/hki/' . $h['id']) . "\n\nSalam,\nLiteraindo Press"
+			. "\nLihat detailnya di: " . url_absolut('/akun/hki/' . $h['id']) . "\n\nSalam,\n" . $GLOBALS['SITUS']['nama']
 		);
 	}
 }
@@ -533,7 +533,7 @@ function riwayat_hki(int $id): string
 {
 	$out = '';
 	foreach (semua('SELECT c.*, u.nama, u.peran FROM hki_catatan c LEFT JOIN pengguna u ON u.id = c.pengguna_id WHERE c.hki_id = ? ORDER BY c.id DESC', [$id]) as $c) {
-		$siapa = $c['sistem'] ? 'Sistem' : (['admin' => 'Admin Literaindo', 'keuangan' => 'Keuangan Literaindo'][$c['peran']] ?? $c['nama']);
+		$siapa = $c['sistem'] ? 'Sistem' : (['admin' => 'Admin Penerbit', 'keuangan' => 'Keuangan Penerbit'][$c['peran']] ?? $c['nama']);
 		$out .= '<li class="' . ($c['sistem'] ? 'riwayat--sistem' : ($c['peran'] === 'admin' ? 'riwayat--admin' : '')) . '"><span class="riwayat__siapa">' . e((string) $siapa) . ' · ' . e(tanggal($c['dibuat'])) . '</span><p>' . nl2br(e($c['isi'])) . '</p></li>';
 	}
 	return '<ul class="riwayat">' . $out . '</ul>';
@@ -734,7 +734,7 @@ function admin_hki_detail(bool $post, string $id): void
 				notif_hki($h, 'Pesan dari admin: ' . mb_substr(input('isi'), 0, 200));
 				q('UPDATE hki SET diubah = ? WHERE id = ?', [sekarang(), $hid]);
 				$pemilik = satu('SELECT * FROM pengguna WHERE id = ?', [$h['pengguna_id']]);
-				kirim_email($pemilik['email'], 'Pesan baru untuk HKI "' . $h['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin Literaindo Press mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/hki/$hid"));
+				kirim_email($pemilik['email'], 'Pesan baru untuk HKI "' . $h['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin " . $GLOBALS['SITUS']['nama'] . " mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/hki/$hid"));
 				pesan('Pesan terkirim.');
 			} elseif (in_array($aksi, ['terima_bayar', 'tolak_bayar'], true) && $s === 'VERIFIKASI_BAYAR') {
 				verifikasi_hki($h, $aksi === 'terima_bayar', $catatan);
