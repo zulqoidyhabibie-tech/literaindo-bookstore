@@ -50,21 +50,76 @@ function halaman_katalog(bool $post): void
 			'bahasa' => $b['bahasa'],
 			'penulis' => $penulis,
 		];
+		$harga_kartu = $b['harga_cetak'] > 0 ? (int) $b['harga_cetak'] : (int) $b['harga_ebook'];
 		$kartu .= '<li class="kartu" data-buku="' . e($b['slug']) . '">
 	<a class="kartu__tautan" href="' . e(url(buku_url($b))) . '">
-		<span class="kartu__sampul">' . sampul_html($b, 200, 300, 'lazy') . '</span>
-		' . ($b['status'] === 'segera_terbit' ? '<span class="label label--segera">Segera Terbit</span>' : '') . '
-		<span class="kartu__judul">' . e($b['judul']) . '</span>
+		<span class="kartu__sampul">' . sampul_html($b, 200, 300, 'lazy')
+			. ($b['status'] === 'segera_terbit' ? '<span class="label label--segera">Segera Terbit</span>' : '') . '</span>
+		<span class="kartu__badan">
+			' . ($b['kategori'] !== '' ? '<span class="kartu__kategori">' . e($b['kategori']) . '</span>' : '') . '
+			<span class="kartu__judul">' . e($b['judul']) . '</span>
+			<span class="kartu__penulis">' . e(implode(', ', $penulis)) . '</span>
+			<span class="kartu__kaki">' . ($harga_kartu > 0 ? '<span class="kartu__harga">' . rupiah($harga_kartu) . '</span>' : '<span class="kartu__harga kartu__harga--kosong">Lihat detail</span>')
+			. '<span class="kartu__panah" aria-hidden="true">' . ikon('panah') . '</span></span>
+		</span>
 	</a>
-	<span class="kartu__kategori">' . e($b['kategori']) . '</span>
-	<span class="kartu__penulis">' . e(implode(', ', $penulis)) . '</span>
 </li>';
 	}
 
-	$isi = '<section class="panel" id="katalog" aria-labelledby="judul-katalog">
-	<h1 id="judul-katalog">Katalog</h1>
+	// Hero: sampul buku terbaru (maks. 3) sebagai tumpukan.
+	global $SITUS;
+	$tumpuk = '';
+	$n_tumpuk = 0;
+	foreach ($buku as $b) {
+		if ($b['sampul'] === '' || $n_tumpuk >= 3) {
+			continue;
+		}
+		$tumpuk .= '<a class="tumpukan__buku tumpukan__buku--' . (++$n_tumpuk) . '" href="' . e(url(buku_url($b))) . '" tabindex="-1">' . sampul_html($b, 260, 390) . '</a>';
+	}
+	$kategori_unik = array_values(array_unique(array_filter(array_column($buku, 'kategori'))));
+	sort($kategori_unik, SORT_NATURAL | SORT_FLAG_CASE);
+	$chip = '';
+	if (count($kategori_unik) > 0) {
+		$chip = '<div class="chip-baris" role="group" aria-label="Pilih kategori"><button type="button" class="chip" data-kategori="" aria-pressed="true">Semua</button>';
+		foreach ($kategori_unik as $k) {
+			$chip .= '<button type="button" class="chip" data-kategori="' . e($k) . '" aria-pressed="false">' . e($k) . '</button>';
+		}
+		$chip .= '</div>';
+	}
+
+	$hero = '<section class="hero" aria-labelledby="judul-hero">
+	<div class="hero__teks">
+		<p class="hero__label">' . e($SITUS['tagline']) . '</p>
+		<h1 id="judul-hero">Temukan buku bermutu untuk <em>belajar, meneliti,</em> dan berkarya.</h1>
+		<p class="hero__deskripsi">Buku terbitan ' . e($SITUS['nama']) . ' dari berbagai bidang, tersedia dalam format cetak dan e-book. Pesan langsung di website dan bayar mudah dengan QRIS.</p>
+		<form class="hero__cari" role="search" action="' . e(url('/')) . '#katalog" method="get">
+			<label class="tersembunyi" for="hero-judul">Cari judul atau penulis</label>
+			' . ikon('cari') . '<input type="search" id="hero-judul" name="judul" placeholder="Cari judul atau penulis…">
+			<button type="submit" class="tombol">Cari</button>
+		</form>
+		<ul class="hero__fakta">
+			<li><strong>' . count($buku) . '</strong> judul buku</li>
+			<li><strong>Cetak</strong> &amp; e-book</li>
+			<li><strong>QRIS</strong> semua bank</li>
+		</ul>
+	</div>
+	' . ($tumpuk ? '<div class="hero__visual" aria-hidden="true"><div class="tumpukan tumpukan--' . $n_tumpuk . '">' . $tumpuk . '</div></div>' : '') . '
+</section>
+<section class="keunggulan" aria-label="Mengapa belanja di sini">
+	<div>' . ikon('buku') . '<p><strong>Terbitan resmi</strong><span>Langsung dari penerbit, isi asli dan terjaga mutunya.</span></p></div>
+	<div>' . ikon('uang') . '<p><strong>Bayar mudah</strong><span>Satu QRIS untuk semua aplikasi bank dan dompet digital.</span></p></div>
+	<div>' . ikon('kirim') . '<p><strong>Dikirim ke alamat Anda</strong><span>Buku cetak dikemas rapi, nomor resi dikirim ke email.</span></p></div>
+	<div>' . ikon('perisai') . '<p><strong>Pesanan pribadi</strong><span>Data dan pembayaran hanya tampil di halaman pesanan Anda.</span></p></div>
+</section>
+';
+
+	$isi = $hero . '<section class="panel panel--katalog" id="katalog" aria-labelledby="judul-katalog">
+	<div class="bagian-judul">
+		<div><p class="bagian-judul__label">Koleksi kami</p><h2 id="judul-katalog">Katalog Buku</h2></div>
+		<p class="katalog__jumlah" aria-live="polite">Menampilkan ' . count($buku) . ' buku</p>
+	</div>
 	<form class="filter" role="search" action="' . e(url('/')) . '" method="get">
-		<label class="filter__isian"><span class="tersembunyi">Judul buku</span><input type="search" name="judul" id="f-judul" placeholder="Judul buku"></label>
+		<label class="filter__isian filter__isian--utama"><span class="tersembunyi">Judul buku</span>' . ikon('cari') . '<input type="search" name="judul" id="f-judul" placeholder="Judul buku atau penulis"></label>
 		<label class="filter__isian"><span class="tersembunyi">ISBN</span><input type="search" name="isbn" id="f-isbn" placeholder="ISBN" inputmode="numeric"></label>
 		' . pilihan_filter('kategori', 'Semua Kategori', array_column($buku, 'kategori'))
 		. pilihan_filter('tahun', 'Semua Tahun', array_column($buku, 'tahun'))
@@ -75,12 +130,16 @@ function halaman_katalog(bool $post): void
 			<button type="reset" class="tombol tombol--ikon" aria-label="Atur ulang pencarian" title="Atur ulang">' . ikon('ulang') . '</button>
 		</div>
 	</form>
-	<p class="katalog__jumlah" aria-live="polite">Menampilkan ' . count($buku) . ' buku</p>
-	<ul class="katalog">' . $kartu . '</ul>
+	' . $chip . '
+<ul class="katalog">' . $kartu . '</ul>
 	<p class="katalog__kosong"' . ($buku ? ' hidden' : '') . '>' . ($buku ? 'Buku tidak ditemukan. Coba kata kunci lain atau atur ulang pencarian.' : 'Katalog sedang disiapkan.') . '</p>
 </section>
 <script type="application/json" id="data-katalog">' . str_replace('<', '<', (string) json_encode($data, JSON_UNESCAPED_UNICODE)) . '</script>
-<script src="' . e(url('/assets/js/katalog.js')) . '" defer></script>';
+<section class="ajakan" aria-label="Bantuan">
+	<div><h2>Butuh bantuan memilih buku?</h2><p>Tim kami siap membantu lewat WhatsApp pada ' . e($SITUS['jam_layanan']) . '.</p></div>
+	<a class="tombol tombol--terang" href="' . e(wa_link('Halo ' . $SITUS['nama'] . ', saya ingin bertanya tentang buku.')) . '">' . ikon('wa') . ' Chat WhatsApp</a>
+</section>
+<script src="' . e(url('/assets/js/katalog.js')) . '?v=2" defer></script>';
 
 	tampil('', $isi, ['path' => '/', 'kelas' => 'beranda']);
 }
@@ -152,15 +211,20 @@ function halaman_buku(bool $post, string $slug): void
 		'description' => $ringkas,
 	]);
 
-	$isi = '<article class="panel buku">
+	$isi = '<nav class="remah" aria-label="Lokasi halaman"><a href="' . e(url('/')) . '">Beranda</a><span aria-hidden="true">/</span><a href="' . e(url('/#katalog')) . '">Katalog</a><span aria-hidden="true">/</span><span aria-current="page">' . e($b['judul']) . '</span></nav>
+<article class="panel buku">
 	<div class="buku__atas">
 		<figure class="buku__sampul">' . sampul_html($b, 400, 600) . '</figure>
 		<div class="buku__info">
 			' . ($segera ? '<span class="label label--segera">Segera Terbit</span>' : '') . '
 			<h1>' . e($b['judul']) . ($b['subjudul'] ? '<span class="buku__subjudul">' . e($b['subjudul']) . '</span>' : '') . '</h1>
+			' . ($penulis ? '<p class="buku__oleh">oleh <strong>' . e(implode(', ', $penulis)) . '</strong></p>' : '') . '
+			<div class="buku__beli">
+				' . ($harga ? '<ul class="buku__harga">' . $harga . '</ul>' : '') . '
+				<div class="buku__pesan">' . $pesan . '</div>
+			</div>
+			<h2 class="buku__judul-data">Detail buku</h2>
 			<dl class="buku__data">' . $dl . '</dl>
-			' . ($harga ? '<ul class="buku__harga">' . $harga . '</ul>' : '') . '
-			<div class="buku__pesan">' . $pesan . '</div>
 		</div>
 	</div>
 	' . ($deskripsi ? '<section class="buku__deskripsi" aria-labelledby="judul-deskripsi"><h2 id="judul-deskripsi">' . ikon('deskripsi') . 'Deskripsi</h2>' . $deskripsi . '</section>' : '') . '
@@ -215,7 +279,8 @@ function halaman_konten(bool $post, string $slug): void
 		'harga_hki' => rupiah(harga_hki()),
 	];
 	$html = preg_replace_callback('/\{\{(\w+)\}\}/', fn ($x) => $ganti[$x[1]] ?? $x[0], (string) preg_replace('/<!--\s*judul:.*?-->\s*/', '', $mentah));
-	tampil($judul, '<article class="panel konten"><h1>' . e($judul) . "</h1>\n" . $html . '</article>', ['path' => "/$slug/", 'kelas' => 'halaman-konten']);
+	$kepala = '<header class="judul-halaman"><nav class="remah" aria-label="Lokasi halaman"><a href="' . e(url('/')) . '">Beranda</a><span aria-hidden="true">/</span><span aria-current="page">' . e($judul) . '</span></nav><h1>' . e($judul) . '</h1></header>';
+	tampil($judul, $kepala . '<article class="panel konten">' . $html . '</article>', ['path' => "/$slug/", 'kelas' => 'halaman-konten']);
 }
 
 function media_sampul(bool $post, string $nama): void
