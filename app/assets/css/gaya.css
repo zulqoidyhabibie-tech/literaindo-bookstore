@@ -3373,3 +3373,44 @@ main.wadah {
 		grid-template-columns: none;
 	}
 }
+
+/* ---------- Lebar layar: isi ±1400px, pembuka beranda penuh dari tepi ke tepi ---------- */
+
+:root {
+	--lebar: 1400px;
+}
+
+body {
+	overflow-x: clip;
+}
+
+.beranda main.wadah {
+	padding-top: 0;
+}
+
+.beranda .hero {
+	width: 100vw;
+	margin-left: calc(50% - 50vw);
+	border-radius: 0;
+	box-shadow: none;
+	padding-top: clamp(2.5rem, 6vw, 5rem);
+	padding-bottom: clamp(2.5rem, 6vw, 5rem);
+	padding-left: max(2rem, calc((100vw - var(--lebar)) / 2 + 16px));
+	padding-right: max(2rem, calc((100vw - var(--lebar)) / 2 + 16px));
+}
+
+.beranda .keunggulan {
+	position: relative;
+	z-index: 2;
+	margin-top: -2.5rem;
+}
+
+@media (max-width: 760px) {
+	.beranda .hero {
+		padding: 1.75rem 1.25rem 3.5rem;
+	}
+
+	.beranda .keunggulan {
+		margin-top: -2rem;
+	}
+}
