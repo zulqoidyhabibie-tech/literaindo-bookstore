@@ -19,7 +19,7 @@ const WAKTU_TAHAP_BUKU = [
 	'Oleh penulis',
 	'1 hari kerja',
 	'6 hari kerja',
-	'7–9 hari kerja',
+	'7–18 hari kerja',
 	'1 hari kerja',
 	'11–18 hari kerja',
 ];
