@@ -16,8 +16,8 @@ const JENIS_BERKAS = [
 	'keterangan_pd' => ['Surat keterangan karya milik umum', ['pdf', 'jpg', 'jpeg', 'png'], 5],
 	// Berkas ISBN yang disiapkan admin
 	'permohonan_isbn'  => ['Surat permohonan ISBN', ['pdf', 'jpg', 'jpeg', 'png'], 5],
-	'halaman_awal'     => ['Halaman awal (judul, balik judul, kata pengantar, daftar isi)', ['pdf', 'doc', 'docx'], 20],
-	'naskah_watermark' => ['Naskah akhir ber-watermark', ['pdf'], 30],
+	'halaman_awal'     => ['Halaman judul, balik judul, daftar isi, kata pengantar (1 PDF)', ['pdf'], 2],
+	'naskah_watermark' => ['Naskah ber-watermark (arsip)', ['pdf'], 30],
 ];
 
 /** Jenis karya => [label, berkas tambahan yang wajib, keterangan]. */

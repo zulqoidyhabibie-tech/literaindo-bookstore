@@ -310,34 +310,47 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		'DITOLAK' => '<p>Pengajuan ditolak.</p>',
 		default => '',
 	};
-	// Daftar periksa berkas ISBN sesuai ketentuan Perpusnas.
+	// Daftar periksa berkas ISBN, urut sesuai daftar "File berkas" di isbn.perpusnas.go.id.
 	$jk = JENIS_KARYA[$p['jenis_karya'] ?? 'asli'] ?? JENIS_KARYA['asli'];
+	$jenis = $p['jenis_karya'] ?? 'asli';
 	$cek = [
-		['a', 'Surat permohonan ISBN (kop surat, tanda tangan pimpinan, stempel)', 'permohonan_isbn'],
-		['b', 'Halaman awal: judul, balik judul, kata pengantar, daftar isi', 'halaman_awal'],
-		['c', 'Naskah akhir terbitan ber-watermark', 'naskah_watermark'],
-		['d', 'Surat pernyataan keaslian karya bermeterai', 'pernyataan'],
+		['a', 'Surat permohonan', 'permohonan_isbn', ''],
+		['b', 'Surat pernyataan keaslian karya', 'pernyataan', $jenis === 'asli' ? '' : 'hanya untuk karya asli'],
+		['c', 'Surat izin penerjemahan', 'izin_terjemah', $jenis === 'terjemahan' ? '' : 'hanya untuk buku terjemahan'],
+		['d', 'Surat pengalihan penerbitan', 'pengalihan', $jenis === 'dialihkan' ? '' : 'hanya jika ada pengalihan penerbitan'],
+		['e', 'Halaman judul, balik halaman judul, daftar isi, dan kata pengantar, digabung 1 PDF kurang dari 2 MB', 'halaman_awal', ''],
 	];
-	foreach (['izin_terjemah' => 'e', 'pengalihan' => 'f', 'keterangan_pd' => 'g'] as $j => $huruf) {
-		if ($jk[1] === $j) {
-			$cek[] = [$huruf, JENIS_BERKAS[$j][0], $j];
-		}
-	}
 	$li = '';
-	foreach ($cek as [$huruf, $label, $j]) {
+	$butir = function (string $tanda, string $label, ?array $b, string $kelas = '', string $kosong = 'belum ada') {
+		return '<li class="' . ($kelas !== '' ? $kelas : ($b ? 'ada' : 'belum')) . '"><span class="periksa__tanda" aria-hidden="true">' . ($b ? '✓' : ($kelas === 'tidak-perlu' ? '–' : '')) . '</span><span>' . $tanda . e($label)
+			. ($b ? ' · <a href="' . e(url('/berkas/' . $b['id'])) . '">' . e($b['nama_asli']) . '</a>' : ($kosong !== '' ? ' · <em>' . e($kosong) . '</em>' : '')) . '</span></li>';
+	};
+	foreach ($cek as [$huruf, $label, $j, $tidak_perlu]) {
 		$b = berkas_terakhir($pid, $j);
-		$li .= '<li class="' . ($b ? 'ada' : 'belum') . '"><span class="periksa__tanda" aria-hidden="true">' . ($b ? '✓' : '') . '</span><span><strong>' . $huruf . '.</strong> ' . e($label)
-			. ($b ? ' · <a href="' . e(url('/berkas/' . $b['id'])) . '">' . e($b['nama_asli']) . '</a>' : ' · <em>belum ada</em>') . '</span></li>';
+		$li .= $tidak_perlu !== '' && !$b
+			? $butir('<strong>' . $huruf . '.</strong> ', $label . ' (' . $tidak_perlu . ')', null, 'tidak-perlu', 'tidak perlu')
+			: $butir('<strong>' . $huruf . '.</strong> ', $label, $b);
 	}
-	$li .= '<li class="' . ($buku ? 'ada' : 'belum') . '"><span class="periksa__tanda" aria-hidden="true">' . ($buku ? '✓' : '') . '</span><span><strong>h.</strong> Link katalog buku di website'
+	// Pelengkap di luar daftar file berkas Perpusnas.
+	$tambahan = '';
+	if ($jenis === 'milik_umum') {
+		$tambahan .= $butir('', 'Surat keterangan karya milik umum', berkas_terakhir($pid, 'keterangan_pd'));
+	}
+	$tambahan .= '<li class="' . ($buku ? 'ada' : 'belum') . '"><span class="periksa__tanda" aria-hidden="true">' . ($buku ? '✓' : '') . '</span><span>Link katalog buku di website'
 		. ($buku ? ' · <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a>' : ' · <em>dibuat saat tagihan pelunasan ditetapkan</em>') . '</span></li>';
+	if ($w = berkas_terakhir($pid, 'naskah_watermark')) {
+		$tambahan .= $butir('', 'Naskah ber-watermark (arsip, tidak wajib)', $w);
+	}
 	$kotak_isbn = $p['status'] === 'DRAF' ? '' : '<div class="kotak-dalam"><h3>Berkas ISBN</h3>
-		<p class="catatan">Jenis karya: <strong>' . e($jk[0]) . '</strong>. Lengkapi semua butir sebelum mengajukan ke isbn.perpusnas.go.id.</p>
+		<p class="catatan">Jenis karya: <strong>' . e($jk[0]) . '</strong>. Butir a–e mengikuti daftar file berkas di isbn.perpusnas.go.id. Lengkapi butir yang wajib sebelum mengajukan.</p>
 		<ul class="periksa">' . $li . '</ul>
-		<details><summary>Unggah berkas a, b, c</summary><form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="berkas_isbn">
-			<label for="permohonan_isbn">a. Surat permohonan ISBN <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label><input type="file" id="permohonan_isbn" name="permohonan_isbn" accept=".pdf,.jpg,.jpeg,.png">
-			<label for="halaman_awal">b. Halaman awal <span class="catatan">(PDF/DOC/DOCX, maks. 20 MB)</span></label><input type="file" id="halaman_awal" name="halaman_awal" accept=".pdf,.doc,.docx">
-			<label for="naskah_watermark">c. Naskah akhir ber-watermark <span class="catatan">(PDF, maks. 30 MB)</span></label><input type="file" id="naskah_watermark" name="naskah_watermark" accept=".pdf">
+		<p class="catatan"><strong>Pelengkap</strong></p>
+		<ul class="periksa">' . $tambahan . '</ul>
+		<details><summary>Unggah berkas a dan e</summary><form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="berkas_isbn">
+			<label for="permohonan_isbn">a. Surat permohonan <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label><input type="file" id="permohonan_isbn" name="permohonan_isbn" accept=".pdf,.jpg,.jpeg,.png">
+			<label for="halaman_awal">e. Halaman judul, balik halaman judul, daftar isi, dan kata pengantar <span class="catatan">(digabung jadi 1 file PDF, kurang dari 2 MB)</span></label><input type="file" id="halaman_awal" name="halaman_awal" accept=".pdf">
+			<p class="catatan">Butir b, c, dan d diunggah penulis saat mengirim naskah.</p>
+			<details><summary>Naskah ber-watermark (arsip, tidak wajib)</summary><label for="naskah_watermark">Naskah ber-watermark <span class="catatan">(PDF, maks. 30 MB)</span></label><input type="file" id="naskah_watermark" name="naskah_watermark" accept=".pdf"></details>
 			<button type="submit" class="tombol">Simpan Berkas</button></form></details></div>';
 
 	if (!in_array($p['status'], ['SELESAI', 'DITOLAK'], true)) {

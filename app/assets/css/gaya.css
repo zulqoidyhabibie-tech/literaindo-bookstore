@@ -738,6 +738,14 @@ main {
 	color: #fff;
 }
 
+.periksa li.tidak-perlu {
+	color: var(--redup);
+}
+
+.periksa li.tidak-perlu em {
+	color: var(--redup);
+}
+
 .periksa li.ada .periksa__tanda {
 	background: #1f9e55;
 	border-color: #1f9e55;
