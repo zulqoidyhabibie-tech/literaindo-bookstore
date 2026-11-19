@@ -79,6 +79,8 @@ function skema_hki(string $driver): array
 			pemegang $teks,
 			tautan_contoh VARCHAR(255) NOT NULL DEFAULT '',
 			biaya INT NOT NULL DEFAULT 0,
+			jenis_biaya VARCHAR(10) NOT NULL DEFAULT '',
+			kode_khusus VARCHAR(30) NOT NULL DEFAULT '',
 			status VARCHAR(30) NOT NULL DEFAULT 'DRAF',
 			bayar_status VARCHAR(10) NOT NULL DEFAULT '',
 			bukti_berkas_id $fk NULL,
@@ -100,6 +102,13 @@ function skema_hki(string $driver): array
 			nama_asli VARCHAR(255) NOT NULL,
 			ukuran INT NOT NULL DEFAULT 0,
 			pengunggah_id $fk NULL,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE IF NOT EXISTS hki_kode (
+			id $id,
+			kode VARCHAR(30) NOT NULL UNIQUE,
+			keterangan VARCHAR(150) NOT NULL DEFAULT '',
+			aktif TINYINT NOT NULL DEFAULT 1,
 			dibuat DATETIME NOT NULL
 		)$akhir",
 		"CREATE TABLE IF NOT EXISTS hki_catatan (
@@ -126,6 +135,26 @@ function pastikan_skema(): void
 	if ($versi < 13) {
 		migrasi_reset_sandi();
 	}
+	if ($versi < 14) {
+		migrasi_harga_hki();
+	}
+}
+
+/** v14 (19 Nov 2026): harga khusus HKI (jenis biaya, kode harga khusus). */
+function migrasi_harga_hki(): void
+{
+	foreach (['jenis_biaya' => 'VARCHAR(10)', 'kode_khusus' => 'VARCHAR(30)'] as $kolom => $tipe) {
+		try {
+			db()->query("SELECT $kolom FROM hki LIMIT 1");
+		} catch (PDOException) {
+			db()->exec("ALTER TABLE hki ADD COLUMN $kolom $tipe NOT NULL DEFAULT ''");
+		}
+	}
+	foreach (skema_hki(config()['db']['driver'] ?? 'mysql') as $sql) {
+		db()->exec($sql); // membuat tabel hki_kode (tabel lain sudah ada)
+	}
+	q("UPDATE hki SET jenis_biaya = CASE WHEN biaya = 0 THEN 'pustaka' ELSE 'umum' END WHERE jenis_biaya = ''");
+	simpan_pengaturan('versi_skema', '14');
 }
 
 /** v13 (19 Nov 2026): tautan atur ulang kata sandi lewat email (sekali pakai, 60 menit). */
