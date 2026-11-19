@@ -3575,7 +3575,8 @@ fieldset.serah legend {
 
 /* ---------- Halaman Layanan HKI ---------- */
 
-.hki-pembuka {
+.hki-pembuka,
+.sorot-pembuka {
 	margin-bottom: 2rem;
 	padding: clamp(1.25rem, 4vw, 2.25rem);
 	border-radius: var(--sudut-besar);
@@ -3583,13 +3584,15 @@ fieldset.serah legend {
 	border-left: 5px solid var(--warna-utama);
 }
 
-.hki-pembuka h2 {
+.hki-pembuka h2,
+.sorot-pembuka h2 {
 	margin-top: 0.25rem;
 	font-size: clamp(1.45rem, 3.4vw, 1.9rem);
 	line-height: 1.25;
 }
 
-.hki-pembuka__label {
+.hki-pembuka__label,
+.sorot-pembuka__label {
 	margin: 0;
 	font-size: 0.82rem;
 	font-weight: 700;
@@ -3598,7 +3601,8 @@ fieldset.serah legend {
 	color: var(--warna-utama);
 }
 
-.konten .hki-kartu {
+.konten .hki-kartu,
+.konten .kartu-info {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 0.85rem;
@@ -3606,7 +3610,8 @@ fieldset.serah legend {
 	list-style: none;
 }
 
-.konten .hki-kartu li {
+.konten .hki-kartu li,
+.konten .kartu-info li {
 	margin: 0;
 	padding: 1rem 1.1rem;
 	border: 1px solid var(--garis);
@@ -3617,7 +3622,8 @@ fieldset.serah legend {
 	font-size: 0.95rem;
 }
 
-.konten .hki-kartu strong {
+.konten .hki-kartu strong,
+.konten .kartu-info strong {
 	display: block;
 	margin-bottom: 0.3rem;
 	color: var(--tinta);
@@ -3649,25 +3655,29 @@ fieldset.serah legend {
 	opacity: 0.85;
 }
 
-.konten details.hki-tanya {
+.konten details.hki-tanya,
+.konten details.tanya {
 	margin-bottom: 0.6rem;
 	padding: 0.85rem 1rem;
 	border-radius: 12px;
 	background: var(--latar);
 }
 
-.konten details.hki-tanya > summary {
+.konten details.hki-tanya > summary,
+.konten details.tanya > summary {
 	margin: 0;
 	font-weight: 700;
 	color: var(--tinta);
 	cursor: pointer;
 }
 
-.konten details.hki-tanya p {
+.konten details.hki-tanya p,
+.konten details.tanya p {
 	margin: 0.6rem 0 0;
 }
 
-.hki-penutup {
+.hki-penutup,
+.penutup-ajak {
 	margin-top: 2.25rem;
 	padding-top: 1.5rem;
 	border-top: 1px solid var(--garis);
@@ -3675,7 +3685,16 @@ fieldset.serah legend {
 }
 
 @media (max-width: 560px) {
-	.konten .hki-kartu {
+	.konten .hki-kartu,
+	.konten .kartu-info {
 		grid-template-columns: 1fr;
 	}
+}
+
+.konten .catatan-sorot {
+	margin: 1.5rem 0;
+	padding: 1rem 1.2rem;
+	border-radius: 12px;
+	border-left: 4px solid var(--aksen);
+	background: color-mix(in srgb, var(--aksen) 10%, #fff);
 }
