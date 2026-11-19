@@ -8,6 +8,41 @@ function penulis_daftar(string $s): array
 	return array_values(array_filter(array_map('trim', preg_split('/[\n;]+/', $s) ?: [])));
 }
 
+const FORMAT_BUKU = ['cetak' => 'Cetak', 'ebook' => 'E-book', 'keduanya' => 'Cetak & E-book'];
+
+/** Apakah buku terbit dalam bentuk cetak. */
+function ada_cetak(array $b): bool
+{
+	return ($b['format'] ?? 'cetak') !== 'ebook';
+}
+
+/** Apakah buku terbit dalam bentuk e-book (PDF). */
+function ada_ebook(array $b): bool
+{
+	return in_array($b['format'] ?? 'cetak', ['ebook', 'keduanya'], true);
+}
+
+/** Harga yang benar-benar bisa dipesan: [cetak, ebook]. */
+function harga_jual(array $b): array
+{
+	return [
+		ada_cetak($b) ? (int) $b['harga_cetak'] : 0,
+		ada_ebook($b) && $b['ebook_path'] !== '' ? (int) $b['harga_ebook'] : 0,
+	];
+}
+
+/** Ukuran file e-book, mis. "2,4 MB", atau string kosong bila file belum ada. */
+function ukuran_ebook(array $b): string
+{
+	$file = DATA_DIR . '/berkas/' . $b['ebook_path'];
+	return $b['ebook_path'] !== '' && is_file($file) ? ukuran_berkas((int) filesize($file)) : '';
+}
+
+function lencana_format(array $b): string
+{
+	return '<span class="kartu__format">' . (ada_cetak($b) ? '<span>Cetak</span>' : '') . (ada_ebook($b) ? '<span class="kartu__format--ebook">E-book</span>' : '') . '</span>';
+}
+
 function buku_url(array $b): string
 {
 	return '/buku/' . $b['slug'] . '/';
@@ -49,8 +84,10 @@ function halaman_katalog(bool $post): void
 			'tahun' => $b['tahun'],
 			'bahasa' => $b['bahasa'],
 			'penulis' => $penulis,
+			'format' => array_values(array_filter([ada_cetak($b) ? 'cetak' : '', ada_ebook($b) ? 'ebook' : ''])),
 		];
-		$harga_kartu = $b['harga_cetak'] > 0 ? (int) $b['harga_cetak'] : (int) $b['harga_ebook'];
+		[$hc, $he] = harga_jual($b);
+		$harga_kartu = $hc > 0 ? $hc : (ada_ebook($b) ? (int) $b['harga_ebook'] : 0);
 		$kartu .= '<li class="kartu" data-buku="' . e($b['slug']) . '">
 	<a class="kartu__tautan" href="' . e(url(buku_url($b))) . '">
 		<span class="kartu__sampul">' . sampul_html($b, 200, 300, 'lazy')
@@ -59,6 +96,7 @@ function halaman_katalog(bool $post): void
 			' . ($b['kategori'] !== '' ? '<span class="kartu__kategori">' . e($b['kategori']) . '</span>' : '') . '
 			<span class="kartu__judul">' . e($b['judul']) . '</span>
 			<span class="kartu__penulis">' . e(implode(', ', $penulis)) . '</span>
+			' . lencana_format($b) . '
 			<span class="kartu__kaki">' . ($harga_kartu > 0 ? '<span class="kartu__harga">' . rupiah($harga_kartu) . '</span>' : '<span class="kartu__harga kartu__harga--kosong">Lihat detail</span>')
 			. '<span class="kartu__panah" aria-hidden="true">' . ikon('panah') . '</span></span>
 		</span>
@@ -125,6 +163,7 @@ function halaman_katalog(bool $post): void
 		. pilihan_filter('tahun', 'Semua Tahun', array_column($buku, 'tahun'))
 		. pilihan_filter('bahasa', 'Semua Bahasa', array_column($buku, 'bahasa'))
 		. pilihan_filter('penulis', 'Semua Penulis', $semua_penulis) . '
+		<label class="filter__isian"><span class="tersembunyi">Format</span><select name="format" id="f-format"><option value="">Semua Format</option><option value="cetak">Buku cetak</option><option value="ebook">E-book</option></select></label>
 		<div class="filter__tombol">
 			<button type="submit" class="tombol">Cari Buku</button>
 			<button type="reset" class="tombol tombol--ikon" aria-label="Atur ulang pencarian" title="Atur ulang">' . ikon('ulang') . '</button>
@@ -139,7 +178,7 @@ function halaman_katalog(bool $post): void
 	<div><h2>Butuh bantuan memilih buku?</h2><p>Tim kami siap membantu lewat WhatsApp pada ' . e($SITUS['jam_layanan']) . '.</p></div>
 	<a class="tombol tombol--terang" href="' . e(wa_link('Halo ' . $SITUS['nama'] . ', saya ingin bertanya tentang buku.')) . '">' . ikon('wa') . ' Chat WhatsApp</a>
 </section>
-<script src="' . e(url('/assets/js/katalog.js')) . '?v=2" defer></script>';
+<script src="' . e(url('/assets/js/katalog.js')) . '?v=3" defer></script>';
 
 	tampil('', $isi, ['path' => '/', 'kelas' => 'beranda']);
 }
@@ -159,12 +198,14 @@ function halaman_buku(bool $post, string $slug): void
 		['penulis', 'Penulis', implode(', ', $penulis)],
 		['editor', 'Editor', $b['editor']],
 		['penerbit', 'Penerbit', $SITUS['nama']],
-		['isbn', 'ISBN', $b['isbn'] ?: ($segera ? 'Dalam proses pengajuan' : '')],
-		['isbn', 'e-ISBN', $b['eisbn']],
+		['buku', 'Format', FORMAT_BUKU[$b['format'] ?? 'cetak'] ?? 'Cetak'],
+		['isbn', 'ISBN', ada_cetak($b) ? ($b['isbn'] ?: ($segera ? 'Dalam proses pengajuan' : '')) : ''],
+		['isbn', 'e-ISBN', ada_ebook($b) ? ($b['eisbn'] ?: ($segera ? 'Dalam proses pengajuan' : '')) : $b['eisbn']],
 		['tahun', 'Tahun terbit', $b['tahun']],
 		['edisi', 'Edisi', $b['edisi']],
 		['halaman', 'Jumlah halaman', $b['halaman']],
-		['ukuran', 'Ukuran', $b['ukuran']],
+		['ukuran', ada_ebook($b) ? 'Ukuran buku cetak' : 'Ukuran', ada_cetak($b) ? $b['ukuran'] : ''],
+		['unduh', 'File e-book', ada_ebook($b) && ukuran_ebook($b) !== '' ? 'PDF, ' . ukuran_ebook($b) : (ada_ebook($b) ? 'PDF' : '')],
 		['bahasa', 'Bahasa', $b['bahasa']],
 		['kategori', 'Kategori', $b['kategori']],
 		['status', 'Status', $segera ? 'Segera Terbit' : 'Sudah Terbit'],
@@ -174,20 +215,32 @@ function halaman_buku(bool $post, string $slug): void
 		$dl .= '<div><dt>' . ikon($ik) . e($label) . '</dt><dd>' . e($v) . '</dd></div>';
 	}
 
+	[$hc, $he] = harga_jual($b);
 	$harga = '';
-	if ($b['harga_cetak'] > 0) {
+	if (ada_cetak($b) && $b['harga_cetak'] > 0) {
 		$harga .= '<li><span>Cetak</span><strong>' . rupiah($b['harga_cetak']) . '</strong></li>';
 	}
-	if ($b['harga_ebook'] > 0) {
+	if (ada_ebook($b) && $b['harga_ebook'] > 0) {
 		$harga .= '<li><span>E-book (PDF)</span><strong>' . rupiah($b['harga_ebook']) . '</strong></li>';
 	}
+	$cuplikan = $b['cuplikan_path'] !== ''
+		? '<a class="tombol tombol--kedua" href="' . e(url(buku_url($b) . 'cuplikan')) . '" target="_blank" rel="noopener">' . ikon('buku') . ' Baca cuplikan</a>'
+		: '';
 
 	$pesan = $segera
 		? '<p class="catatan">Buku ini segera terbit dan belum dapat dipesan.</p><a class="tombol tombol--wa" href="' . e(wa_link("Halo {$SITUS['nama']}, saya ingin menanyakan jadwal terbit buku \"{$b['judul']}\".")) . '">' . ikon('wa') . ' Tanya jadwal terbit</a>'
-		: (($b['harga_cetak'] > 0 || ($b['harga_ebook'] > 0 && $b['ebook_path'] !== ''))
+		: (($hc > 0 || $he > 0)
 			? '<a class="tombol" href="' . e(url('/pesan/' . $b['slug'])) . '">Beli Buku Ini</a><p class="catatan">Pesan langsung di website. Total pembayaran dan QRIS tampil di halaman pesanan pribadi Anda. Lihat <a href="' . e(url('/cara-pemesanan/')) . '">cara pemesanan</a>.</p>'
 			: '<p class="catatan">Buku ini belum dijual.</p>')
 			. '<a class="tautan-wa" href="' . e(wa_link("Halo {$SITUS['nama']}, saya ingin bertanya tentang buku \"{$b['judul']}\".")) . '">' . ikon('wa') . ' Tanya via WhatsApp</a>';
+	$pesan .= $cuplikan;
+
+	$info_ebook = ada_ebook($b) ? '<div class="buku__ebook"><h2>' . ikon('unduh') . 'Tentang e-book ini</h2><ul>
+		<li>Format PDF' . (ukuran_ebook($b) !== '' ? ' (' . e(ukuran_ebook($b)) . ')' : '') . ', bisa dibaca di HP, tablet, dan laptop.</li>
+		' . ($b['eisbn'] !== '' ? '<li>Ber-ISBN elektronik (e-ISBN) <strong>' . e($b['eisbn']) . '</strong>.</li>' : '') . '
+		<li>Setelah pembayaran diverifikasi, tombol unduh muncul di halaman pesanan pribadi Anda dan berlaku ' . EBOOK_HARI . ' hari.</li>
+		<li>Untuk penggunaan pribadi. Lihat <a href="' . e(url('/syarat-ketentuan/')) . '">Syarat &amp; Ketentuan</a>.</li>
+	</ul></div>' : '';
 
 	$deskripsi = '';
 	foreach (preg_split('/\n\s*\n/', (string) $b['deskripsi']) ?: [] as $p) {
@@ -205,7 +258,13 @@ function halaman_buku(bool $post, string $slug): void
 		'author' => array_map(fn ($n) => ['@type' => 'Person', 'name' => $n], $penulis),
 		'publisher' => ['@type' => 'Organization', 'name' => $SITUS['nama']],
 		'inLanguage' => $b['bahasa'] === 'Indonesia' ? 'id' : $b['bahasa'],
-		'isbn' => $b['isbn'],
+		'isbn' => $b['isbn'] ?: $b['eisbn'],
+		'bookFormat' => ada_cetak($b) ? (ada_ebook($b) ? '' : 'https://schema.org/Paperback') : 'https://schema.org/EBook',
+		'workExample' => ada_cetak($b) && ada_ebook($b) ? [
+			edisi_schema($b, 'https://schema.org/Paperback', $b['isbn'], (int) $b['harga_cetak'], $segera),
+			edisi_schema($b, 'https://schema.org/EBook', $b['eisbn'], (int) $b['harga_ebook'], $segera),
+		] : '',
+		'offers' => ada_cetak($b) && ada_ebook($b) ? '' : penawaran_schema(ada_cetak($b) ? (int) $b['harga_cetak'] : (int) $b['harga_ebook'], $segera),
 		'datePublished' => $b['tahun'],
 		'image' => $b['sampul'] ? url_absolut($b['sampul']) : '',
 		'description' => $ringkas,
@@ -223,6 +282,7 @@ function halaman_buku(bool $post, string $slug): void
 				' . ($harga ? '<ul class="buku__harga">' . $harga . '</ul>' : '') . '
 				<div class="buku__pesan">' . $pesan . '</div>
 			</div>
+			' . $info_ebook . '
 			<h2 class="buku__judul-data">Detail buku</h2>
 			<dl class="buku__data">' . $dl . '</dl>
 		</div>
@@ -238,6 +298,26 @@ function halaman_buku(bool $post, string $slug): void
 		'kepala' => '<meta property="og:type" content="book">' . ($b['sampul'] ? '<meta property="og:image" content="' . e(url_absolut($b['sampul'])) . '">' : '')
 			. '<script type="application/ld+json">' . str_replace('<', '<', (string) json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '</script>',
 	]);
+}
+
+function penawaran_schema(int $harga, bool $segera): array|string
+{
+	return $harga > 0 ? ['@type' => 'Offer', 'price' => $harga, 'priceCurrency' => 'IDR', 'availability' => $segera ? 'https://schema.org/PreOrder' : 'https://schema.org/InStock'] : '';
+}
+
+function edisi_schema(array $b, string $bentuk, string $isbn, int $harga, bool $segera): array
+{
+	return array_filter(['@type' => 'Book', 'name' => $b['judul'], 'bookFormat' => $bentuk, 'isbn' => $isbn, 'offers' => penawaran_schema($harga, $segera)]);
+}
+
+/** Cuplikan PDF (contoh isi) yang boleh dibaca siapa saja. */
+function buku_cuplikan(bool $post, string $slug): void
+{
+	$b = satu('SELECT slug, cuplikan_path FROM buku WHERE slug = ? AND tampil = 1', [$slug]);
+	if (!$b || $b['cuplikan_path'] === '') {
+		tidak_ditemukan();
+	}
+	kirim_berkas($b['cuplikan_path'], $b['slug'] . '-cuplikan.pdf', true, 3600);
 }
 
 function halaman_konten(bool $post, string $slug): void

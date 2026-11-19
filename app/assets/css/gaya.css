@@ -3414,3 +3414,68 @@ body {
 		margin-top: -2rem;
 	}
 }
+
+/* ---------- E-book (2026-11) ---------- */
+
+.kartu__format {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3rem;
+	margin-top: 0.2rem;
+}
+
+.kartu__format span {
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 0.15em 0.6em;
+	border-radius: 999px;
+	border: 1px solid var(--garis);
+	color: var(--redup);
+}
+
+.kartu__format span.kartu__format--ebook {
+	border-color: transparent;
+	background: var(--hijau-muda);
+	color: var(--warna-utama);
+}
+
+.buku__ebook {
+	margin: -0.75rem 0 1.75rem;
+	padding: 1rem 1.25rem;
+	border-radius: 16px;
+	border: 1px dashed color-mix(in srgb, var(--warna-utama) 35%, #fff);
+}
+
+.buku__ebook h2 {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	margin: 0 0 0.5rem;
+	font-size: 1rem;
+	color: var(--warna-utama);
+}
+
+.buku__ebook ul {
+	margin: 0;
+	padding-left: 1.2rem;
+	font-size: 0.92rem;
+	line-height: 1.55;
+}
+
+.buku__pesan .tombol--kedua {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+fieldset.serah {
+	margin: 1.25rem 0;
+	padding: 1rem 1.25rem;
+	border: 1px solid var(--garis);
+	border-radius: 12px;
+}
+
+fieldset.serah legend {
+	padding: 0 0.4rem;
+	font-weight: 700;
+}

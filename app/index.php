@@ -40,6 +40,7 @@ if ($post) {
 $rute = [
 	'#^/$#'                                 => 'halaman_katalog',
 	'#^/buku/([a-z0-9-]+)$#'                => 'halaman_buku',
+	'#^/buku/([a-z0-9-]+)/cuplikan$#'       => 'buku_cuplikan',
 	'#^/media/sampul/([a-zA-Z0-9._-]+)$#'   => 'media_sampul',
 	'#^/masuk$#'                            => 'halaman_masuk',
 	'#^/daftar$#'                           => 'halaman_daftar',
