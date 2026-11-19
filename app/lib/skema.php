@@ -123,6 +123,27 @@ function pastikan_skema(): void
 	if ($versi < 12) {
 		migrasi_ebook();
 	}
+	if ($versi < 13) {
+		migrasi_reset_sandi();
+	}
+}
+
+/** v13 (19 Nov 2026): tautan atur ulang kata sandi lewat email (sekali pakai, 60 menit). */
+function migrasi_reset_sandi(): void
+{
+	$driver = config()['db']['driver'] ?? 'mysql';
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	db()->exec("CREATE TABLE IF NOT EXISTS reset_sandi (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			token_hash CHAR(64) NOT NULL,
+			kedaluwarsa DATETIME NOT NULL,
+			dipakai TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL
+		)$akhir");
+	simpan_pengaturan('versi_skema', '13');
 }
 
 /** Migrasi v1 sampai v11. */

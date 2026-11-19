@@ -81,3 +81,18 @@ pencantuman ISBN. Karena itu halaman **Layanan Penerbitan**, **Info ISBN**, dan
 **Layanan HKI**, beserta pendaftaran akun mandiri, disembunyikan secara bawaan
 (alamatnya menampilkan 404; admin yang masuk tetap bisa melihatnya). Semuanya
 bisa dinyalakan lagi di **Admin → Pengaturan → Halaman layanan publik**.
+
+## Email (lupa kata sandi dan pemberitahuan)
+
+Pengguna yang lupa kata sandi membuka **Masuk → Lupa kata sandi?**, mengisi
+email, lalu menerima tautan sekali pakai yang berlaku 60 menit (maksimal 3
+permintaan per akun per jam; jawaban halaman sama untuk email terdaftar
+maupun tidak).
+
+Supaya email benar-benar terkirim, buat kotak surat di hPanel → **Email**
+(misalnya `noreply@literaindo.com`), lalu isi alamat dan kata sandinya di
+**Admin → Pengaturan → Pengiriman email** dan tekan *Simpan & Kirim Email Uji*.
+Server bawaan: `smtp.hostinger.com`, port 465 (SSL). Kata sandi disimpan di
+database, bukan di repo. Alternatif: tambahkan
+`'smtp' => ['host' => ..., 'port' => 465, 'user' => ..., 'pass' => ..., 'aman' => 'ssl']`
+di `literaindo-data/config.php`.
