@@ -901,7 +901,7 @@ function isi_bawaan_halaman(string $slug): string
 /** Bersihkan HTML dari penyunting: hanya tag dan atribut aman yang disimpan. */
 function bersihkan_html(string $html): string
 {
-	$izin = ['p', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'u', 'a', 'br', 'span', 'div', 'blockquote'];
+	$izin = ['p', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'u', 'a', 'br', 'span', 'div', 'blockquote', 'section', 'details', 'summary'];
 	$buang = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'link', 'meta'];
 	// Lindungi {{penanda}} agar tidak di-encode di href.
 	$html = (string) preg_replace('/\{\{(\w+)\}\}/', 'PENANDA__$1__PENANDA', $html);
