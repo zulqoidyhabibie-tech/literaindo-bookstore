@@ -647,7 +647,11 @@ function admin_pengguna(bool $post): void
 function admin_pengaturan(bool $post): void
 {
 	global $SITUS;
-	wajib_masuk('admin');
+	$admin = wajib_masuk('admin');
+	if ($post && input('aksi') === 'email') {
+		simpan_pengaturan_email($admin);
+		arahkan('/admin/pengaturan#email');
+	}
 	if ($post) {
 		try {
 			$biaya = (int) preg_replace('/\D/', '', input('biaya_awal'));
@@ -723,6 +727,7 @@ function admin_pengaturan(bool $post): void
 		<input type="file" id="qris" name="qris" accept=".jpg,.jpeg,.png,.webp">
 		<button type="submit" class="tombol">Simpan</button>
 	</form>
+	' . form_pengaturan_email($admin) . '
 	</section>';
 	tampil('Pengaturan', $isi, ['panel' => menu_admin('/admin/pengaturan')]);
 }
@@ -998,4 +1003,79 @@ function admin_halaman_ubah(bool $post, string $slug): void
 	. ($ubah ? '<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="bawaan"><details><summary>Kembalikan ke teks bawaan</summary><p>Perubahan Anda di halaman ini akan dihapus.</p><button type="submit" class="tombol tombol--bahaya tombol--kecil">Kembalikan</button></details></form>' : '')
 	. '</section><script src="' . e(url('/assets/js/penyunting.js')) . '?v=1" defer></script>';
 	tampil('Ubah ' . $daftar[$slug], $isi, ['panel' => menu_admin('/admin/halaman')]);
+}
+
+/** Kotak "Pengiriman email" (SMTP) di halaman Pengaturan. */
+function form_pengaturan_email(array $admin): string
+{
+	$s = smtp_pengaturan();
+	$status = smtp_siap()
+		? '<p class="pesan pesan--ok">Email dikirim lewat kotak surat <strong>' . e($s['user']) . '</strong>.</p>'
+		: (email_siap()
+			? '<p class="pesan pesan--info">SMTP belum diatur. Email dikirim dengan fungsi mail() server, yang sering masuk Spam atau tidak sampai. Isi formulir di bawah agar email lupa kata sandi dan pemberitahuan status terkirim dengan andal.</p>'
+			: '<p class="pesan pesan--galat">Website belum bisa mengirim email. Fitur <strong>Lupa kata sandi</strong> dan pemberitahuan status lewat email belum berjalan sampai formulir di bawah diisi.</p>');
+	if ($s['dari_config']) {
+		return '<h2 id="email">Pengiriman email</h2>' . $status . '<p class="catatan">Pengaturan SMTP diambil dari file config.php di folder literaindo-data. Ubah di file itu.</p>
+	<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="email"><input type="hidden" name="hanya_uji" value="1">
+		<button type="submit" class="tombol tombol--kedua">Kirim email uji ke ' . e($admin['email']) . '</button></form>';
+	}
+	return '<h2 id="email">Pengiriman email</h2>' . $status . '
+	<form method="post" class="formulir" autocomplete="off">' . csrf_field() . '<input type="hidden" name="aksi" value="email">
+		<p class="catatan">Pakai kotak surat dari hPanel → <strong>Email</strong>, misalnya <em>noreply@literaindo.com</em>. Email lupa kata sandi dan pemberitahuan dikirim atas nama alamat ini.</p>
+		<label for="smtp_user">Alamat email pengirim</label>
+		<input type="email" id="smtp_user" name="smtp_user" value="' . e($s['user']) . '" placeholder="noreply@literaindo.com">
+		<label for="smtp_pass">Kata sandi kotak surat</label>
+		<input type="password" id="smtp_pass" name="smtp_pass" autocomplete="new-password" placeholder="' . ($s['pass'] !== '' ? 'Tersimpan. Kosongkan bila tidak diganti' : '') . '">
+		<details><summary>Server SMTP (biarkan bawaan untuk Hostinger)</summary>
+			<label for="smtp_host">Server SMTP</label>
+			<input id="smtp_host" name="smtp_host" value="' . e($s['host'] ?: 'smtp.hostinger.com') . '">
+			<label for="smtp_port">Port</label>
+			<input id="smtp_port" name="smtp_port" type="number" value="' . e((string) ($s['port'] ?: 465)) . '">
+			<label for="smtp_aman">Keamanan</label>
+			<select id="smtp_aman" name="smtp_aman"><option value="ssl"' . ($s['aman'] !== 'tls' ? ' selected' : '') . '>SSL (port 465)</option><option value="tls"' . ($s['aman'] === 'tls' ? ' selected' : '') . '>STARTTLS (port 587)</option></select>
+		</details>
+		<button type="submit" class="tombol">Simpan &amp; Kirim Email Uji ke ' . e($admin['email']) . '</button>
+		' . ($s['host'] !== '' ? '<label class="centang"><input type="checkbox" name="hapus" value="1"> Hapus pengaturan SMTP</label>' : '') . '
+	</form>';
+}
+
+function simpan_pengaturan_email(array $admin): void
+{
+	if (empty($_POST['hanya_uji']) && !smtp_pengaturan()['dari_config']) {
+		if (!empty($_POST['hapus'])) {
+			foreach (['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_aman'] as $k) {
+				simpan_pengaturan($k, '');
+			}
+			pesan('Pengaturan SMTP dihapus.', 'info');
+			return;
+		}
+		$user = mb_strtolower(input('smtp_user'));
+		if (!filter_var($user, FILTER_VALIDATE_EMAIL)) {
+			pesan('Isi alamat email pengirim yang valid.', 'galat');
+			return;
+		}
+		$host = preg_replace('/[^a-z0-9.-]/i', '', input('smtp_host', 'smtp.hostinger.com')) ?: 'smtp.hostinger.com';
+		simpan_pengaturan('smtp_host', $host);
+		simpan_pengaturan('smtp_port', (string) max(1, min(65535, (int) input('smtp_port', '465'))));
+		simpan_pengaturan('smtp_aman', input('smtp_aman') === 'tls' ? 'tls' : 'ssl');
+		simpan_pengaturan('smtp_user', $user);
+		$pass = (string) ($_POST['smtp_pass'] ?? '');
+		if ($pass !== '') {
+			simpan_pengaturan('smtp_pass', $pass);
+		}
+		if (pengaturan('smtp_pass') === '') {
+			pesan('Isi kata sandi kotak surat.', 'galat');
+			return;
+		}
+	}
+	$nama = $GLOBALS['SITUS']['nama'];
+	$ok = kirim_email($admin['email'], 'Email uji dari ' . $nama, "Halo {$admin['nama']},
+
+Email ini membuktikan website $nama sudah bisa mengirim email (lupa kata sandi dan pemberitahuan status).
+
+Salam,
+$nama", $galat);
+	$ok
+		? pesan('Tersimpan. Email uji terkirim ke ' . $admin['email'] . '. Periksa kotak masuk (atau folder Spam).')
+		: pesan('Tersimpan, tetapi email uji gagal: ' . $galat, 'galat');
 }

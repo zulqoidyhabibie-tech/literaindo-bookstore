@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/lib/inti.php';
+require __DIR__ . '/lib/surel.php';
 require __DIR__ . '/lib/tampilan.php';
 require __DIR__ . '/lib/berkas.php';
 require __DIR__ . '/lib/skema.php';
@@ -44,6 +45,8 @@ $rute = [
 	'#^/media/sampul/([a-zA-Z0-9._-]+)$#'   => 'media_sampul',
 	'#^/masuk$#'                            => 'halaman_masuk',
 	'#^/daftar$#'                           => 'halaman_daftar',
+	'#^/lupa-sandi$#'                        => 'halaman_lupa_sandi',
+	'#^/atur-sandi/([a-f0-9]{64})$#'         => 'halaman_atur_sandi',
 	'#^/keluar$#'                           => 'halaman_keluar',
 	'#^/akun$#'                             => 'pengaju_daftar',
 	'#^/akun/profil$#'                      => 'pengaju_profil',

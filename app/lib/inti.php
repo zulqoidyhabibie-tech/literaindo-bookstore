@@ -393,16 +393,7 @@ function url_absolut(string $path): string
 	return rtrim($SITUS['url'], '/') . $path;
 }
 
-function kirim_email(string $ke, string $judul, string $isi): void
-{
-	$dari = config()['email_pengirim'] ?? '';
-	if ($dari === '' || !function_exists('mail')) {
-		return;
-	}
-	$nama = '=?UTF-8?B?' . base64_encode((string) ($GLOBALS['SITUS']['nama'] ?? '')) . '?=';
-	$header = "From: $nama <$dari>\r\nContent-Type: text/plain; charset=UTF-8";
-	@mail($ke, '=?UTF-8?B?' . base64_encode($judul) . '?=', $isi, $header);
-}
+// kirim_email() ada di lib/surel.php
 
 // ---------------------------------------------------------------------------
 // Spesifikasi cetak buku. Setiap pilihan: [label, keterangan, gambar contoh].
