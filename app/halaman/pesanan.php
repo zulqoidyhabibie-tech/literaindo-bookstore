@@ -31,26 +31,37 @@ function link_pesanan(array $o, bool $absolut = false): string
 /** Simpan file e-book dari formulir katalog admin (DATA_DIR/berkas/ebook). */
 function simpan_ebook(int $buku_id): void
 {
-	$f = $_FILES['ebook'] ?? null;
+	simpan_pdf_buku($buku_id, 'ebook', 'ebook', 'ebook_path', 30, 'File e-book');
+}
+
+/** Simpan PDF cuplikan (contoh isi) yang boleh dibaca publik (DATA_DIR/berkas/cuplikan). */
+function simpan_cuplikan(int $buku_id): void
+{
+	simpan_pdf_buku($buku_id, 'cuplikan', 'cuplikan', 'cuplikan_path', 10, 'File cuplikan');
+}
+
+function simpan_pdf_buku(int $buku_id, string $isian, string $subfolder, string $kolom, int $maks_mb, string $nama_isian): void
+{
+	$f = $_FILES[$isian] ?? null;
 	if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
 		return;
 	}
-	if ($f['error'] !== UPLOAD_ERR_OK || $f['size'] > 30 * 1024 * 1024) {
-		throw new RuntimeException('File e-book gagal diunggah. Maksimal 30 MB.');
+	if ($f['error'] !== UPLOAD_ERR_OK || $f['size'] > $maks_mb * 1024 * 1024) {
+		throw new RuntimeException("$nama_isian gagal diunggah. Maksimal $maks_mb MB.");
 	}
 	$mime = (new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']) ?: '';
 	if (strtolower(pathinfo((string) $f['name'], PATHINFO_EXTENSION)) !== 'pdf' || $mime !== 'application/pdf') {
-		throw new RuntimeException('File e-book harus berformat PDF.');
+		throw new RuntimeException("$nama_isian harus berformat PDF.");
 	}
-	$folder = DATA_DIR . '/berkas/ebook';
+	$folder = DATA_DIR . '/berkas/' . $subfolder;
 	if (!is_dir($folder) && !mkdir($folder, 0750, true)) {
-		throw new RuntimeException('Folder e-book tidak dapat dibuat.');
+		throw new RuntimeException("Folder $subfolder tidak dapat dibuat.");
 	}
 	$nama = $buku_id . '-' . bin2hex(random_bytes(8)) . '.pdf';
 	if (!move_uploaded_file($f['tmp_name'], "$folder/$nama")) {
-		throw new RuntimeException('File e-book tidak dapat disimpan.');
+		throw new RuntimeException("$nama_isian tidak dapat disimpan.");
 	}
-	q('UPDATE buku SET ebook_path = ? WHERE id = ?', ['ebook/' . $nama, $buku_id]);
+	q("UPDATE buku SET $kolom = ? WHERE id = ?", ["$subfolder/$nama", $buku_id]);
 }
 
 /** Taksiran berat kiriman (gram): A5/B5/A4, HVS 75 gr, soft cover, + kemasan 100 g. */
@@ -139,7 +150,8 @@ function halaman_pesan_buku(bool $post, string $slug): void
 	if (!$b) {
 		tidak_ditemukan();
 	}
-	$format = array_filter(['cetak' => (int) $b['harga_cetak'], 'ebook' => $b['ebook_path'] !== '' ? (int) $b['harga_ebook'] : 0]);
+	[$hc, $he] = harga_jual($b);
+	$format = array_filter(['cetak' => $hc, 'ebook' => $he]);
 	if (!$format) {
 		pesan('Buku ini belum dijual.', 'info');
 		arahkan('/buku/' . $b['slug'] . '/');

@@ -23,6 +23,7 @@
 		var tahun = nilai('tahun');
 		var bahasa = nilai('bahasa');
 		var penulis = nilai('penulis');
+		var format = nilai('format');
 		var tampil = 0;
 
 		data.forEach(function (b) {
@@ -32,12 +33,13 @@
 				(!kategori || b.kategori === kategori) &&
 				(!tahun || b.tahun === tahun) &&
 				(!bahasa || b.bahasa === bahasa) &&
-				(!penulis || b.penulis.indexOf(penulis) !== -1);
+				(!penulis || b.penulis.indexOf(penulis) !== -1) &&
+				(!format || (b.format || []).indexOf(format) !== -1);
 			if (kartu[b.slug]) kartu[b.slug].hidden = !cocok;
 			if (cocok) tampil++;
 		});
 
-		var aktif = judul || isbn || kategori || tahun || bahasa || penulis;
+		var aktif = judul || isbn || kategori || tahun || bahasa || penulis || format;
 		jumlah.textContent = aktif
 			? 'Menampilkan ' + tampil + ' dari ' + data.length + ' buku'
 			: 'Menampilkan ' + data.length + ' buku';
@@ -58,14 +60,14 @@
 
 	// Isi form dari alamat (?judul=...), supaya hasil pencarian bisa dibagikan.
 	var params = new URLSearchParams(location.search);
-	['judul', 'isbn', 'kategori', 'tahun', 'bahasa', 'penulis'].forEach(function (n) {
+	['judul', 'isbn', 'kategori', 'tahun', 'bahasa', 'penulis', 'format'].forEach(function (n) {
 		if (params.has(n)) form.elements[n].value = params.get(n);
 	});
 
 	form.addEventListener('submit', function (e) {
 		e.preventDefault();
 		var q = new URLSearchParams();
-		['judul', 'isbn', 'kategori', 'tahun', 'bahasa', 'penulis'].forEach(function (n) {
+		['judul', 'isbn', 'kategori', 'tahun', 'bahasa', 'penulis', 'format'].forEach(function (n) {
 			if (nilai(n)) q.set(n, nilai(n));
 		});
 		history.replaceState(null, '', (q.toString() ? '?' + q : location.pathname) + '#katalog');

@@ -20,9 +20,11 @@ function admin_dasbor(bool $post): void
 	}
 	$tindakan = semua("SELECT p.*, u.nama FROM pengajuan p JOIN pengguna u ON u.id = p.pengguna_id WHERE p.status IN ('VERIFIKASI_BAYAR_1','DITINJAU','PROSES_ISBN','VERIFIKASI_BAYAR_2','LUNAS') ORDER BY p.diubah ASC");
 	$hki_periksa = (int) satu("SELECT COUNT(*) AS n FROM hki WHERE status = 'DIPERIKSA'")['n'];
+	$belum_serah = count(array_filter(semua("SELECT * FROM buku WHERE status = 'terbit'"), fn ($b) => serah_kurang($b) !== []));
 	$isi = '<section class="panel"><h1>Dasbor Admin</h1>
 	<div class="kotak-status-grid">' . $kotak . '</div>
 	<h2>Menunggu tindakan Anda (' . count($tindakan) . ')</h2>' . tabel_pengajuan($tindakan) . '
+	' . ($belum_serah ? '<p class="pesan pesan--info">' . $belum_serah . ' buku sudah terbit tetapi wajib serah simpannya ke Perpusnas belum dicatat. <a href="' . e(url('/admin/buku')) . '">Buka Katalog</a></p>' : '') . '
 	' . ($hki_periksa ? '<p class="pesan pesan--info">' . $hki_periksa . ' permohonan HKI menunggu pemeriksaan. <a href="' . e(url('/admin/hki?status=DIPERIKSA')) . '">Buka Pengajuan HKI</a></p>' : '') . '
 	<p class="catatan">Jumlah buku di katalog: ' . (int) satu('SELECT COUNT(*) AS n FROM buku')['n'] . ' · Pengguna terdaftar: ' . (int) satu('SELECT COUNT(*) AS n FROM pengguna')['n'] . '</p></section>';
 	tampil('Dasbor Admin', $isi, ['panel' => menu_admin('/admin')]);
@@ -151,15 +153,15 @@ function admin_pengajuan_detail(bool $post, string $id): void
 				if (!preg_match('/^[0-9Xx-]{10,17}$/', $isbn)) {
 					throw new RuntimeException('Nomor ISBN tidak valid. Contoh: 978-623-00-1234-5');
 				}
-				if ($p['buku_id']) {
-					q("UPDATE buku SET isbn = ?, eisbn = ?, status = 'terbit' WHERE id = ?", [$isbn, input('eisbn'), $p['buku_id']]);
-				}
 				$format = $p['format_terbit'] ?? 'cetak';
 				if ($format === 'keduanya' && !preg_match('/^[0-9Xx-]{10,17}$/', input('eisbn'))) {
 					throw new RuntimeException('Isi juga ISBN e-book (e-ISBN) yang valid.');
 				}
-				if ($p['buku_id'] && $format === 'ebook') {
-					q('UPDATE buku SET eisbn = ? WHERE id = ?', [$isbn, $p['buku_id']]);
+				if ($p['buku_id']) {
+					// E-book saja: nomor yang terbit adalah e-ISBN, bukan ISBN buku cetak.
+					q("UPDATE buku SET isbn = ?, eisbn = ?, status = 'terbit' WHERE id = ?", $format === 'ebook'
+						? ['', $isbn, $p['buku_id']]
+						: [$isbn, input('eisbn'), $p['buku_id']]);
 				}
 				if ((int) $p['tagihan_2'] <= 0) {
 					ubah_status($p, 'SELESAI', 'ISBN terbit: ' . $isbn . '. Tidak ada pelunasan; penerbitan selesai.');
@@ -387,11 +389,35 @@ function slug_unik(string $slug, int $kecuali = 0): string
 
 function buat_buku_dari_pengajuan(array $p, string $slug, int $harga_cetak): int
 {
-	q('INSERT INTO buku (slug, judul, subjudul, penulis, kategori, tahun, status, halaman, ukuran, bahasa, harga_cetak, sampul, deskripsi, tampil, pengajuan_id, dibuat) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [
-		slug_unik($slug !== '' ? $slug : $p['judul']), $p['judul'], $p['subjudul'], $p['penulis'], $p['kategori'], date('Y'), 'segera_terbit',
-		$p['halaman_final'], $p['ukuran'], 'Indonesia', $harga_cetak, terbitkan_sampul((int) $p['id']), $p['sinopsis'], 1, $p['id'], sekarang(),
+	$format = isset(FORMAT_BUKU[$p['format_terbit'] ?? '']) ? $p['format_terbit'] : 'cetak';
+	q('INSERT INTO buku (slug, judul, subjudul, penulis, kategori, tahun, status, format, halaman, ukuran, bahasa, harga_cetak, sampul, deskripsi, tampil, pengajuan_id, dibuat) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [
+		slug_unik($slug !== '' ? $slug : $p['judul']), $p['judul'], $p['subjudul'], $p['penulis'], $p['kategori'], date('Y'), 'segera_terbit', $format,
+		$p['halaman_final'], $p['ukuran'], 'Indonesia', $format === 'ebook' ? 0 : $harga_cetak, terbitkan_sampul((int) $p['id']), $p['sinopsis'], 1, $p['id'], sekarang(),
 	]);
 	return (int) db()->lastInsertId();
+}
+
+/** Daftar wajib serah simpan yang belum dicatat untuk buku yang sudah terbit. */
+function serah_kurang(array $b): array
+{
+	if ($b['status'] !== 'terbit') {
+		return [];
+	}
+	return array_values(array_filter([
+		ada_cetak($b) && $b['serah_cetak'] === '' ? 'cetak' : '',
+		ada_ebook($b) && $b['serah_digital'] === '' ? 'e-book' : '',
+	]));
+}
+
+function status_serah(array $b): string
+{
+	if ($b['status'] !== 'terbit') {
+		return '<span class="catatan">Belum terbit</span>';
+	}
+	$kurang = serah_kurang($b);
+	return $kurang
+		? '<span class="lencana lencana--giliran">Belum: ' . e(implode(', ', $kurang)) . '</span>'
+		: '<span class="lencana lencana--selesai">Lengkap</span>';
 }
 
 function admin_buku(bool $post): void
@@ -399,10 +425,11 @@ function admin_buku(bool $post): void
 	wajib_masuk('admin');
 	$baris = '';
 	foreach (semua('SELECT * FROM buku ORDER BY dibuat DESC, id DESC') as $b) {
-		$baris .= '<tr><td><a href="' . e(url('/admin/buku/' . $b['id'])) . '"><strong>' . e($b['judul']) . '</strong></a>' . ($b['tampil'] ? '' : ' <span class="lencana lencana--tolak">Disembunyikan</span>') . '</td><td>' . e(implode(', ', penulis_daftar($b['penulis']))) . '</td><td>' . ($b['status'] === 'terbit' ? 'Sudah Terbit' : 'Segera Terbit') . '</td><td>' . e($b['isbn']) . '</td><td><a href="' . e(url(buku_url($b))) . '" target="_blank">Lihat</a></td></tr>';
+		$nomor = array_filter([ada_cetak($b) && $b['isbn'] !== '' ? 'ISBN ' . $b['isbn'] : '', ada_ebook($b) && $b['eisbn'] !== '' ? 'e-ISBN ' . $b['eisbn'] : '']);
+		$baris .= '<tr><td><a href="' . e(url('/admin/buku/' . $b['id'])) . '"><strong>' . e($b['judul']) . '</strong></a>' . ($b['tampil'] ? '' : ' <span class="lencana lencana--tolak">Disembunyikan</span>') . '</td><td>' . e(implode(', ', penulis_daftar($b['penulis']))) . '</td><td>' . e(FORMAT_BUKU[$b['format']] ?? 'Cetak') . '</td><td>' . ($b['status'] === 'terbit' ? 'Sudah Terbit' : 'Segera Terbit') . '</td><td>' . e(implode(' · ', $nomor)) . '</td><td>' . status_serah($b) . '</td><td><a href="' . e(url(buku_url($b))) . '" target="_blank">Lihat</a></td></tr>';
 	}
 	$isi = '<section class="panel"><div class="judul-baris"><h1>Katalog</h1><a class="tombol" href="' . e(url('/admin/buku/baru')) . '">Tambah Buku</a></div>
-	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Judul</th><th>Penulis</th><th>Status</th><th>ISBN</th><th></th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
+	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Judul</th><th>Penulis</th><th>Format</th><th>Status</th><th>ISBN</th><th>Serah simpan</th><th></th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
 	tampil('Katalog', $isi, ['panel' => menu_admin('/admin/buku')]);
 }
 
@@ -413,8 +440,8 @@ function admin_buku_form(bool $post, string $id = ''): void
 	if ($id !== '' && !$b) {
 		tidak_ditemukan();
 	}
-	$kolom = ['judul', 'subjudul', 'penulis', 'editor', 'kategori', 'tahun', 'isbn', 'eisbn', 'edisi', 'halaman', 'ukuran', 'bahasa', 'deskripsi'];
-	$v = $b ?: array_fill_keys($kolom, '') + ['slug' => '', 'status' => 'segera_terbit', 'harga_cetak' => 0, 'harga_ebook' => 0, 'sampul' => '', 'tampil' => 1, 'bahasa' => 'Indonesia', 'tahun' => date('Y')];
+	$kolom = ['judul', 'subjudul', 'penulis', 'editor', 'kategori', 'tahun', 'isbn', 'eisbn', 'edisi', 'halaman', 'ukuran', 'bahasa', 'deskripsi', 'format', 'serah_cetak', 'serah_digital'];
+	$v = $b ?: array_fill_keys($kolom, '') + ['slug' => '', 'status' => 'segera_terbit', 'harga_cetak' => 0, 'harga_ebook' => 0, 'sampul' => '', 'tampil' => 1, 'bahasa' => 'Indonesia', 'tahun' => date('Y'), 'format' => 'cetak', 'ebook_path' => '', 'cuplikan_path' => ''];
 
 	if ($post) {
 		foreach ($kolom as $k) {
@@ -424,25 +451,42 @@ function admin_buku_form(bool $post, string $id = ''): void
 		$v['harga_cetak'] = (int) preg_replace('/\D/', '', input('harga_cetak'));
 		$v['harga_ebook'] = (int) preg_replace('/\D/', '', input('harga_ebook'));
 		$v['tampil'] = empty($_POST['tampil']) ? 0 : 1;
+		$v['format'] = isset(FORMAT_BUKU[$v['format']]) ? $v['format'] : 'cetak';
+		foreach (['serah_cetak', 'serah_digital'] as $k) {
+			$v[$k] = preg_match('/^\d{4}-\d{2}-\d{2}$/', $v[$k]) ? $v[$k] : '';
+		}
 		try {
 			if (mb_strlen($v['judul']) < 2) {
 				throw new RuntimeException('Isi judul buku.');
+			}
+			if (!ada_ebook($v) && $v['harga_ebook'] > 0) {
+				throw new RuntimeException('Harga e-book diisi, tetapi format buku "Cetak". Ubah format menjadi "E-book" atau "Cetak & E-book", atau kosongkan harga e-book.');
+			}
+			if (!ada_cetak($v) && $v['harga_cetak'] > 0) {
+				throw new RuntimeException('Harga cetak diisi, tetapi format buku "E-book". Ubah format menjadi "Cetak & E-book", atau kosongkan harga cetak.');
+			}
+			if (!ada_cetak($v) && $v['isbn'] !== '') {
+				throw new RuntimeException('Buku khusus e-book hanya memakai e-ISBN. Pindahkan nomornya ke kolom e-ISBN.');
 			}
 			$sampul = unggah_sampul_katalog('sampul');
 			if ($sampul !== '') {
 				$v['sampul'] = $sampul;
 			}
 			if ($b) {
-				q('UPDATE buku SET judul=?, subjudul=?, penulis=?, editor=?, kategori=?, tahun=?, isbn=?, eisbn=?, edisi=?, halaman=?, ukuran=?, bahasa=?, deskripsi=?, status=?, harga_cetak=?, harga_ebook=?, sampul=?, tampil=? WHERE id=?',
+				q('UPDATE buku SET judul=?, subjudul=?, penulis=?, editor=?, kategori=?, tahun=?, isbn=?, eisbn=?, edisi=?, halaman=?, ukuran=?, bahasa=?, deskripsi=?, format=?, serah_cetak=?, serah_digital=?, status=?, harga_cetak=?, harga_ebook=?, sampul=?, tampil=? WHERE id=?',
 					[...array_map(fn ($k) => $v[$k], $kolom), $v['status'], $v['harga_cetak'], $v['harga_ebook'], $v['sampul'], $v['tampil'], $b['id']]);
 				$bid = (int) $b['id'];
 			} else {
 				$slug = slug_unik(input('slug') !== '' ? input('slug') : $v['judul']);
-				q('INSERT INTO buku (judul, subjudul, penulis, editor, kategori, tahun, isbn, eisbn, edisi, halaman, ukuran, bahasa, deskripsi, status, harga_cetak, harga_ebook, sampul, tampil, slug, dibuat) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+				q('INSERT INTO buku (judul, subjudul, penulis, editor, kategori, tahun, isbn, eisbn, edisi, halaman, ukuran, bahasa, deskripsi, format, serah_cetak, serah_digital, status, harga_cetak, harga_ebook, sampul, tampil, slug, dibuat) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
 					[...array_map(fn ($k) => $v[$k], $kolom), $v['status'], $v['harga_cetak'], $v['harga_ebook'], $v['sampul'], $v['tampil'], $slug, sekarang()]);
 				$bid = (int) db()->lastInsertId();
 			}
 			simpan_ebook($bid);
+			if (!empty($_POST['hapus_cuplikan'])) {
+				q("UPDATE buku SET cuplikan_path = '' WHERE id = ?", [$bid]);
+			}
+			simpan_cuplikan($bid);
 			pesan('Data buku tersimpan.');
 			arahkan('/admin/buku/' . $bid);
 		} catch (RuntimeException $ex) {
@@ -460,7 +504,8 @@ function admin_buku_form(bool $post, string $id = ''): void
 			' . ($b ? '' : $f('slug', 'Link (kosongkan agar dibuat dari judul)', ' pattern="[a-z0-9-]*"')) . '
 			' . $f('editor', 'Editor') . $f('kategori', 'Kategori') . $f('tahun', 'Tahun terbit') . '
 			<div><label for="status">Status</label><select id="status" name="status"><option value="segera_terbit"' . ($v['status'] === 'segera_terbit' ? ' selected' : '') . '>Segera Terbit (belum bisa dipesan)</option><option value="terbit"' . ($v['status'] === 'terbit' ? ' selected' : '') . '>Sudah Terbit</option></select></div>
-			' . $f('isbn', 'ISBN') . $f('eisbn', 'e-ISBN') . $f('edisi', 'Edisi') . $f('halaman', 'Jumlah halaman') . $f('ukuran', 'Ukuran') . $f('bahasa', 'Bahasa') . '
+			<div><label for="format">Format terbit</label><select id="format" name="format">' . implode('', array_map(fn ($k) => '<option value="' . $k . '"' . ($v['format'] === $k ? ' selected' : '') . '>' . e(FORMAT_BUKU[$k]) . '</option>', array_keys(FORMAT_BUKU))) . '</select></div>
+			' . $f('isbn', 'ISBN buku cetak') . $f('eisbn', 'e-ISBN (ISBN e-book)') . $f('edisi', 'Edisi') . $f('halaman', 'Jumlah halaman') . $f('ukuran', 'Ukuran') . $f('bahasa', 'Bahasa') . '
 			' . $f('harga_cetak', 'Harga cetak (Rp, 0 = tidak dijual)', ' inputmode="numeric" data-rupiah') . $f('harga_ebook', 'Harga e-book (Rp, 0 = tidak dijual)', ' inputmode="numeric" data-rupiah') . '
 		</div>
 		<label for="penulis">Penulis (satu nama per baris)</label><textarea id="penulis" name="penulis" rows="3">' . e($v['penulis']) . '</textarea>
@@ -471,6 +516,18 @@ function admin_buku_form(bool $post, string $id = ''): void
 		<label for="ebook">File e-book (PDF, maks. 30 MB) ' . (($b['ebook_path'] ?? '') !== '' ? '<span class="catatan">(sudah ada: ' . e(basename((string) $b['ebook_path'])) . ', unggah untuk mengganti)</span>' : '<span class="catatan">(wajib bila e-book dijual)</span>') . '</label>
 		<input type="file" id="ebook" name="ebook" accept=".pdf">
 		<p class="catatan">File e-book tidak bisa dibuka publik. Pembeli hanya mendapat link unduhan pribadi yang berlaku ' . EBOOK_HARI . ' hari setelah pembayarannya diterima.</p>
+		<label for="cuplikan">Cuplikan (PDF, maks. 10 MB) ' . (($v['cuplikan_path'] ?? '') !== '' ? '<span class="catatan">(sudah ada, <a href="' . e(url(buku_url($v) . 'cuplikan')) . '" target="_blank">lihat</a>; unggah untuk mengganti)</span>' : '<span class="catatan">(opsional)</span>') . '</label>
+		<input type="file" id="cuplikan" name="cuplikan" accept=".pdf">
+		<p class="catatan">Cuplikan bisa dibaca siapa saja lewat tombol "Baca cuplikan" di halaman buku. Isi dengan sampul, daftar isi, dan beberapa halaman awal saja, bukan seluruh buku.</p>
+		' . (($v['cuplikan_path'] ?? '') !== '' ? '<label class="centang"><input type="checkbox" name="hapus_cuplikan" value="1"> Hapus cuplikan</label>' : '') . '
+		<fieldset class="serah">
+			<legend>Wajib serah simpan ke Perpusnas (catatan admin, tidak tampil di website)</legend>
+			<div class="kolom-2">
+				<div><label for="serah_cetak">Tanggal serah buku cetak</label><input type="date" id="serah_cetak" name="serah_cetak" value="' . e((string) $v['serah_cetak']) . '"><p class="catatan">2 eks ke Perpusnas dan 1 eks ke Perpusda.</p></div>
+				<div><label for="serah_digital">Tanggal serah e-book (karya elektronik)</label><input type="date" id="serah_digital" name="serah_digital" value="' . e((string) $v['serah_digital']) . '"><p class="catatan">File PDF e-book ke Perpusnas.</p></div>
+			</div>
+			<p class="catatan">Kosongkan bila belum diserahkan. Buku yang sudah terbit tetapi belum dicatat akan muncul di Dasbor Admin.</p>
+		</fieldset>
 		<label class="centang"><input type="checkbox" id="tampil" name="tampil" value="1"' . ($v['tampil'] ? ' checked' : '') . '> Tampilkan di katalog</label>
 		<div class="formulir__tombol"><button type="submit" class="tombol">Simpan</button></div>
 	</form></section>';

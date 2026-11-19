@@ -117,9 +117,17 @@ function skema_hki(string $driver): array
 function pastikan_skema(): void
 {
 	$versi = (int) pengaturan('versi_skema', '1');
-	if ($versi >= 11) {
-		return;
+	if ($versi < 11) {
+		pastikan_skema_lama($versi);
 	}
+	if ($versi < 12) {
+		migrasi_ebook();
+	}
+}
+
+/** Migrasi v1 sampai v11. */
+function pastikan_skema_lama(int $versi): void
+{
 	if ($versi >= 9) {
 		if ($versi < 10) {
 			pastikan_skema_hki();
@@ -210,6 +218,47 @@ function migrasi_nama_penerbit(): void
 	simpan_pengaturan('versi_skema', '11');
 }
 
+/**
+ * v12 (19 Nov 2026): kesiapan penerbit e-book.
+ * - buku.format: cetak / ebook / keduanya (format terbit yang tampil di katalog).
+ * - buku.cuplikan_path: PDF cuplikan yang boleh dibaca publik.
+ * - buku.serah_cetak, buku.serah_digital: tanggal wajib serah simpan (catatan admin).
+ * - Buku khusus e-book yang nomornya tersimpan sebagai ISBN cetak dipindah ke e-ISBN.
+ */
+function migrasi_ebook(): void
+{
+	$kolom_baru = [
+		'format' => "VARCHAR(10) NOT NULL DEFAULT 'cetak'",
+		'cuplikan_path' => "VARCHAR(255) NOT NULL DEFAULT ''",
+		'serah_cetak' => "VARCHAR(10) NOT NULL DEFAULT ''",
+		'serah_digital' => "VARCHAR(10) NOT NULL DEFAULT ''",
+	];
+	foreach ($kolom_baru as $kolom => $tipe) {
+		try {
+			db()->query("SELECT $kolom FROM buku LIMIT 1");
+		} catch (PDOException) {
+			db()->exec("ALTER TABLE buku ADD COLUMN $kolom $tipe");
+		}
+	}
+	foreach (semua('SELECT b.id, b.isbn, b.eisbn, b.harga_cetak, b.harga_ebook, b.ebook_path, p.format_terbit FROM buku b LEFT JOIN pengajuan p ON p.id = b.pengajuan_id') as $b) {
+		$isbn = (string) $b['isbn'];
+		$eisbn = (string) $b['eisbn'];
+		$ft = (string) ($b['format_terbit'] ?? '');
+		$ada_ebook = in_array($ft, ['ebook', 'keduanya'], true) || $eisbn !== '' || (int) $b['harga_ebook'] > 0 || $b['ebook_path'] !== '';
+		$ada_cetak = in_array($ft, ['cetak', 'keduanya'], true) || ($isbn !== '' && $isbn !== $eisbn) || (int) $b['harga_cetak'] > 0;
+		if ($ft === 'ebook' && (int) $b['harga_cetak'] <= 0) {
+			$ada_cetak = false; // pengajuan e-book saja: ISBN-nya adalah e-ISBN
+		}
+		$format = $ada_ebook ? ($ada_cetak ? 'keduanya' : 'ebook') : 'cetak';
+		if ($format === 'ebook' && $isbn !== '') {
+			$eisbn = $eisbn !== '' ? $eisbn : $isbn;
+			$isbn = '';
+		}
+		q('UPDATE buku SET format = ?, isbn = ?, eisbn = ? WHERE id = ?', [$format, $isbn, $eisbn, $b['id']]);
+	}
+	simpan_pengaturan('versi_skema', '12');
+}
+
 /** v10: pengajuan HKI. */
 function pastikan_skema_hki(): void
 {
@@ -256,6 +305,10 @@ function skema(string $driver): array
 			harga_ebook INT NOT NULL DEFAULT 0,
 			sampul VARCHAR(255) NOT NULL DEFAULT '',
 			ebook_path VARCHAR(255) NOT NULL DEFAULT '',
+			format VARCHAR(10) NOT NULL DEFAULT 'cetak',
+			cuplikan_path VARCHAR(255) NOT NULL DEFAULT '',
+			serah_cetak VARCHAR(10) NOT NULL DEFAULT '',
+			serah_digital VARCHAR(10) NOT NULL DEFAULT '',
 			deskripsi $teks,
 			tampil TINYINT NOT NULL DEFAULT 1,
 			pengajuan_id $fk NULL,
