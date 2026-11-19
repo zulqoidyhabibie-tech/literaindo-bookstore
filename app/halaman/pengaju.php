@@ -14,6 +14,26 @@ const TAHAP_TAMPIL = [
 	['Cetak & kirim', ['LUNAS', 'SELESAI']],
 ];
 
+/** Target waktu kerja tiap tahap (sesuai SOP), tampil di bawah stepper. Bisa diubah di Admin → Pengaturan. */
+const WAKTU_TAHAP_BUKU = [
+	'Oleh penulis',
+	'1 hari kerja',
+	'6 hari kerja',
+	'7–9 hari kerja',
+	'1 hari kerja',
+	'11–18 hari kerja',
+];
+
+function waktu_tahap(string $jenis, int $i, string $bawaan): string
+{
+	return trim(pengaturan('waktu_' . $jenis . '_' . $i, $bawaan));
+}
+
+function label_waktu_tahap(string $teks): string
+{
+	return $teks === '' ? '' : '<small class="stepper__waktu">' . e($teks) . '</small>';
+}
+
 
 function pengajuan_milik(int $id, array $u): array
 {
@@ -328,6 +348,7 @@ function stepper(string $status, string $tautan = '', ?int $dipilih = null): str
 		if ($tautan !== '' && $i <= $posisi) {
 			$teks = '<a href="' . e(url($tautan . ($i === $posisi ? '' : '?tahap=' . $i))) . '"' . ($dipilih === $i ? ' aria-current="page"' : '') . '>' . $teks . '</a>';
 		}
+		$teks .= label_waktu_tahap(waktu_tahap('buku', $i, WAKTU_TAHAP_BUKU[$i] ?? ''));
 		$out .= '<li class="' . trim($kelas) . '"' . ($i === $posisi && !$selesai_semua ? ' aria-current="step"' : '') . '>' . $teks . '</li>';
 	}
 	return $out . '</ol>';
