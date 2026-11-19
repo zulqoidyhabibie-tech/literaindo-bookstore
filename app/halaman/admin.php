@@ -671,6 +671,10 @@ function admin_pengaturan(bool $post): void
 			if ($hki > 0) {
 				simpan_pengaturan('harga_hki', (string) $hki);
 			}
+			$hki_penulis = (int) preg_replace('/\D/', '', input('harga_hki_penulis'));
+			if ($hki_penulis > 0) {
+				simpan_pengaturan('harga_hki_penulis', (string) $hki_penulis);
+			}
 			foreach (array_keys(LAYANAN_PUBLIK) as $jenis) {
 				simpan_pengaturan('tampil_layanan_' . $jenis, empty($_POST['tampil_layanan_' . $jenis]) ? '0' : '1');
 			}
@@ -708,9 +712,12 @@ function admin_pengaturan(bool $post): void
 			<p class="catatan">Harga paket berlaku untuk buku A5, HVS hitam putih, soft cover, sampai batas halaman di atas. Buku yang lebih tebal atau spesifikasinya lain dikenai selisih biaya cetak. Harga cetak per buku = taksiran dari Harga Cetak + margin.</p>
 		</fieldset>
 		<fieldset><legend>Layanan HKI</legend>
-			<label for="harga_hki">Biaya layanan HKI saja (Rp)</label>
+			<label for="harga_hki">Harga umum layanan HKI (Rp)</label>
 			<input id="harga_hki" name="harga_hki" inputmode="numeric" data-rupiah value="' . e((string) harga_hki()) . '">
-			<p class="catatan">Untuk pelanggan yang hanya mengajukan HKI, atau penulis paket selain Pustaka. HKI di Paket Pustaka tetap tanpa biaya tambahan.</p>
+			<p class="catatan">Untuk pemohon yang belum menerbitkan buku di sini.</p>
+			<label for="harga_hki_penulis">Harga HKI penulis kami (Rp)</label>
+			<input id="harga_hki_penulis" name="harga_hki_penulis" inputmode="numeric" data-rupiah value="' . e((string) harga_hki_penulis()) . '">
+			<p class="catatan">Berlaku otomatis untuk penulis yang punya pengajuan buku di sini dan biaya awalnya sudah diterima (Paket Aksara, Digital, atau lainnya), baik HKI untuk buku itu maupun karya lain. HKI di Paket Pustaka tetap tanpa biaya tambahan. Biaya satu permohonan juga bisa diubah dari halaman detail HKI sebelum dibayar.</p>
 		</fieldset>
 		<fieldset><legend>Halaman layanan publik</legend>
 			<p class="catatan">Perpustakaan Nasional melarang website penerbit mempromosikan jasa/fasilitas pencantuman ISBN. Karena itu halaman di bawah <strong>disembunyikan</strong> dari menu dan footer, dan alamatnya menampilkan "Halaman tidak ditemukan". Panel penulis, admin, dan keuangan tetap berjalan. Selama semuanya disembunyikan, pendaftaran akun mandiri ditutup; buat akun penulis di menu <a href="' . e(url('/admin/pengguna')) . '">Pengguna</a>.</p>

@@ -79,6 +79,7 @@ function skema_hki(string $driver): array
 			pemegang $teks,
 			tautan_contoh VARCHAR(255) NOT NULL DEFAULT '',
 			biaya INT NOT NULL DEFAULT 0,
+			jenis_biaya VARCHAR(10) NOT NULL DEFAULT '',
 			status VARCHAR(30) NOT NULL DEFAULT 'DRAF',
 			bayar_status VARCHAR(10) NOT NULL DEFAULT '',
 			bukti_berkas_id $fk NULL,
@@ -126,6 +127,21 @@ function pastikan_skema(): void
 	if ($versi < 13) {
 		migrasi_reset_sandi();
 	}
+	if ($versi < 14) {
+		migrasi_harga_hki();
+	}
+}
+
+/** v14 (19 Nov 2026): jenis biaya HKI (umum, penulis, pustaka, manual). */
+function migrasi_harga_hki(): void
+{
+	try {
+		db()->query('SELECT jenis_biaya FROM hki LIMIT 1');
+	} catch (PDOException) {
+		db()->exec("ALTER TABLE hki ADD COLUMN jenis_biaya VARCHAR(10) NOT NULL DEFAULT ''");
+	}
+	q("UPDATE hki SET jenis_biaya = CASE WHEN biaya = 0 THEN 'pustaka' ELSE 'umum' END WHERE jenis_biaya = ''");
+	simpan_pengaturan('versi_skema', '14');
 }
 
 /** v13 (19 Nov 2026): tautan atur ulang kata sandi lewat email (sekali pakai, 60 menit). */
