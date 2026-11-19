@@ -3572,3 +3572,110 @@ fieldset.serah legend {
 	padding: 0 0.4rem;
 	font-weight: 700;
 }
+
+/* ---------- Halaman Layanan HKI ---------- */
+
+.hki-pembuka {
+	margin-bottom: 2rem;
+	padding: clamp(1.25rem, 4vw, 2.25rem);
+	border-radius: var(--sudut-besar);
+	background: var(--hijau-muda);
+	border-left: 5px solid var(--warna-utama);
+}
+
+.hki-pembuka h2 {
+	margin-top: 0.25rem;
+	font-size: clamp(1.45rem, 3.4vw, 1.9rem);
+	line-height: 1.25;
+}
+
+.hki-pembuka__label {
+	margin: 0;
+	font-size: 0.82rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--warna-utama);
+}
+
+.konten .hki-kartu {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.85rem;
+	padding: 0;
+	list-style: none;
+}
+
+.konten .hki-kartu li {
+	margin: 0;
+	padding: 1rem 1.1rem;
+	border: 1px solid var(--garis);
+	border-top: 3px solid var(--aksen);
+	border-radius: 12px;
+	background: var(--panel);
+	color: var(--redup);
+	font-size: 0.95rem;
+}
+
+.konten .hki-kartu strong {
+	display: block;
+	margin-bottom: 0.3rem;
+	color: var(--tinta);
+	font-size: 1.02rem;
+}
+
+.hki-harga {
+	margin: 2rem 0;
+	padding: 1.25rem 1.4rem;
+	border-radius: 14px;
+	background: var(--warna-utama);
+	color: #fff;
+}
+
+.hki-harga p {
+	margin: 0.2rem 0;
+}
+
+.hki-harga__angka {
+	font-family: var(--huruf-judul);
+	font-size: clamp(1.6rem, 4vw, 2.1rem);
+	font-weight: 700;
+}
+
+.hki-harga__angka span {
+	font-family: inherit;
+	font-size: 1rem;
+	font-weight: 400;
+	opacity: 0.85;
+}
+
+.konten details.hki-tanya {
+	margin-bottom: 0.6rem;
+	padding: 0.85rem 1rem;
+	border-radius: 12px;
+	background: var(--latar);
+}
+
+.konten details.hki-tanya > summary {
+	margin: 0;
+	font-weight: 700;
+	color: var(--tinta);
+	cursor: pointer;
+}
+
+.konten details.hki-tanya p {
+	margin: 0.6rem 0 0;
+}
+
+.hki-penutup {
+	margin-top: 2.25rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--garis);
+	text-align: center;
+}
+
+@media (max-width: 560px) {
+	.konten .hki-kartu {
+		grid-template-columns: 1fr;
+	}
+}
