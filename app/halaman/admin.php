@@ -715,9 +715,9 @@ function admin_pengaturan(bool $post): void
 			<label for="harga_hki">Harga umum layanan HKI (Rp)</label>
 			<input id="harga_hki" name="harga_hki" inputmode="numeric" data-rupiah value="' . e((string) harga_hki()) . '">
 			<p class="catatan">Untuk pemohon yang belum menerbitkan buku di sini.</p>
-			<label for="harga_hki_penulis">Harga HKI penulis kami (Rp)</label>
+			<label for="harga_hki_penulis">Harga khusus HKI (Rp)</label>
 			<input id="harga_hki_penulis" name="harga_hki_penulis" inputmode="numeric" data-rupiah value="' . e((string) harga_hki_penulis()) . '">
-			<p class="catatan">Berlaku otomatis untuk penulis yang punya pengajuan buku di sini dan biaya awalnya sudah diterima (Paket Aksara, Digital, atau lainnya), baik HKI untuk buku itu maupun karya lain. HKI di Paket Pustaka tetap tanpa biaya tambahan. Biaya satu permohonan juga bisa diubah dari halaman detail HKI sebelum dibayar.</p>
+			<p class="catatan">Berlaku otomatis untuk penulis yang punya pengajuan buku di sini dan biaya awalnya sudah diterima (Paket Aksara, Digital, atau lainnya), dan untuk pemohon yang mengisi <a href="' . e(url('/admin/hki#kode-khusus')) . '">kode harga khusus</a> (kerabat, kolega, mahasiswa). HKI di Paket Pustaka tetap tanpa biaya tambahan. Biaya satu permohonan juga bisa diubah dari halaman detail HKI sebelum dibayar.</p>
 		</fieldset>
 		<fieldset><legend>Halaman layanan publik</legend>
 			<p class="catatan">Perpustakaan Nasional melarang website penerbit mempromosikan jasa/fasilitas pencantuman ISBN. Karena itu halaman di bawah <strong>disembunyikan</strong> dari menu dan footer, dan alamatnya menampilkan "Halaman tidak ditemukan". Panel penulis, admin, dan keuangan tetap berjalan. Selama semuanya disembunyikan, pendaftaran akun mandiri ditutup; buat akun penulis di menu <a href="' . e(url('/admin/pengguna')) . '">Pengguna</a>.</p>

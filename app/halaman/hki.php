@@ -50,7 +50,7 @@ function harga_hki(): int
 	return (int) pengaturan('harga_hki', '250000');
 }
 
-/** Harga khusus untuk penulis yang menerbitkan buku di penerbit ini. */
+/** Harga khusus: penulis yang menerbitkan buku di sini dan pemegang kode harga khusus. */
 function harga_hki_penulis(): int
 {
 	return (int) pengaturan('harga_hki_penulis', '250000');
@@ -59,6 +59,7 @@ function harga_hki_penulis(): int
 const JENIS_BIAYA_HKI = [
 	'umum'    => 'Harga umum',
 	'penulis' => 'Harga penulis kami',
+	'kode'    => 'Harga khusus (kode)',
 	'pustaka' => 'Termasuk Paket Pustaka',
 	'manual'  => 'Diubah admin',
 ];
@@ -69,8 +70,15 @@ function penulis_kami(int $uid): bool
 	return (bool) satu("SELECT id FROM pengajuan WHERE pengguna_id = ? AND status IN ('DITINJAU', 'PERLU_REVISI', 'PROSES_ISBN', 'MENUNGGU_BAYAR_2', 'VERIFIKASI_BAYAR_2', 'LUNAS', 'SELESAI') LIMIT 1", [$uid]);
 }
 
+/** Kode harga khusus yang masih aktif, atau null. */
+function kode_hki_aktif(string $kode): ?array
+{
+	$kode = strtoupper(trim($kode));
+	return $kode === '' ? null : satu('SELECT * FROM hki_kode WHERE kode = ? AND aktif = 1', [$kode]);
+}
+
 /** Biaya HKI otomatis untuk pemohon: [nominal, jenis]. */
-function biaya_hki_untuk(int $uid, ?array $pj): array
+function biaya_hki_untuk(int $uid, ?array $pj, string $kode = ''): array
 {
 	if ($pj && ($pj['paket'] ?? '') === 'pustaka') {
 		return [0, 'pustaka'];
@@ -78,11 +86,17 @@ function biaya_hki_untuk(int $uid, ?array $pj): array
 	if (penulis_kami($uid)) {
 		return [harga_hki_penulis(), 'penulis'];
 	}
+	if (kode_hki_aktif($kode)) {
+		return [harga_hki_penulis(), 'kode'];
+	}
 	return [harga_hki(), 'umum'];
 }
 
 function label_biaya_hki(array $h): string
 {
+	if (($h['jenis_biaya'] ?? '') === 'kode') {
+		return 'Harga khusus (kode ' . $h['kode_khusus'] . ')';
+	}
 	return JENIS_BIAYA_HKI[$h['jenis_biaya'] ?? ''] ?? ((int) $h['biaya'] ? 'Harga umum' : 'Termasuk Paket Pustaka');
 }
 
@@ -96,13 +110,14 @@ function segarkan_biaya_hki(array $h): array
 		return $h;
 	}
 	$pj = $h['pengajuan_id'] ? satu('SELECT * FROM pengajuan WHERE id = ?', [$h['pengajuan_id']]) : null;
-	[$biaya, $jenis] = biaya_hki_untuk((int) $h['pengguna_id'], $pj);
+	[$biaya, $jenis] = biaya_hki_untuk((int) $h['pengguna_id'], $pj, (string) ($h['kode_khusus'] ?? ''));
 	if ($biaya === (int) $h['biaya'] && $jenis === ($h['jenis_biaya'] ?? '')) {
 		return $h;
 	}
 	q('UPDATE hki SET biaya = ?, jenis_biaya = ? WHERE id = ?', [$biaya, $jenis, $h['id']]);
 	if ($biaya !== (int) $h['biaya']) {
-		catat_hki((int) $h['id'], null, 'Biaya layanan HKI disesuaikan dari ' . rupiah($h['biaya']) . ' menjadi ' . rupiah($biaya) . ' (' . JENIS_BIAYA_HKI[$jenis] . ').', true);
+		$h = array_merge($h, ['biaya' => $biaya, 'jenis_biaya' => $jenis, 'biaya_lama' => $h['biaya']]);
+		catat_hki((int) $h['id'], null, 'Biaya layanan HKI disesuaikan dari ' . rupiah($h['biaya_lama']) . ' menjadi ' . rupiah($biaya) . ' (' . label_biaya_hki($h) . ').', true);
 	}
 	$h = array_merge($h, ['biaya' => $biaya, 'jenis_biaya' => $jenis]);
 	if ($biaya === 0 && $h['status'] === 'MENUNGGU_BAYAR') {
@@ -350,7 +365,9 @@ function formulir_hki(array $u, ?array $h, ?array $pj, bool $post): void
 	if ($h) {
 		$h = segarkan_biaya_hki($h);
 	}
-	[$biaya_otomatis, $jenis_otomatis] = biaya_hki_untuk((int) $u['id'], $pj);
+	$boleh_kode = !$perbaikan && !($pj && ($pj['paket'] ?? '') === 'pustaka') && (!$h || $h['status'] === 'DRAF');
+	$kode = $post && $boleh_kode ? strtoupper(trim(mb_substr(input('kode_khusus'), 0, 30))) : (string) ($h['kode_khusus'] ?? '');
+	[$biaya_otomatis, $jenis_otomatis] = biaya_hki_untuk((int) $u['id'], $pj, $kode);
 	$v = $h ?: [
 		'jenis_ciptaan' => 'buku',
 		'judul' => $pj ? trim($pj['judul'] . ($pj['subjudul'] ? ': ' . $pj['subjudul'] : '')) : '',
@@ -388,6 +405,9 @@ function formulir_hki(array $u, ?array $h, ?array $pj, bool $post): void
 			'email' => mb_substr(input('pemegang_email'), 0, 150),
 			'hp' => preg_replace('/[^0-9+]/', '', input('pemegang_hp')),
 		] : [];
+		if ($kode !== '' && !kode_hki_aktif($kode)) {
+			$galat[] = 'Kode harga khusus "' . $kode . '" tidak dikenal atau sudah tidak berlaku. Periksa lagi, atau kosongkan kolomnya.';
+		}
 		if ($v['tautan_contoh'] !== '' && !preg_match('#^https?://#i', $v['tautan_contoh'])) {
 			$galat[] = 'Tautan contoh ciptaan harus diawali https://';
 		}
@@ -435,11 +455,11 @@ function formulir_hki(array $u, ?array $h, ?array $pj, bool $post): void
 			db()->beginTransaction();
 			try {
 				if ($h) {
-					q('UPDATE hki SET jenis_ciptaan=?, judul=?, uraian=?, tanggal_umum=?, tempat_umum=?, pencipta=?, pemegang=?, tautan_contoh=?, diubah=? WHERE id=?', [...$data, sekarang(), $h['id']]);
+					q('UPDATE hki SET jenis_ciptaan=?, judul=?, uraian=?, tanggal_umum=?, tempat_umum=?, pencipta=?, pemegang=?, tautan_contoh=?, kode_khusus=?, diubah=? WHERE id=?', [...$data, $kode, sekarang(), $h['id']]);
 					$id = (int) $h['id'];
 				} else {
-					q('INSERT INTO hki (pengguna_id, pengajuan_id, jenis_ciptaan, judul, uraian, tanggal_umum, tempat_umum, pencipta, pemegang, tautan_contoh, biaya, jenis_biaya, status, dibuat, diubah) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-						[$u['id'], $pj['id'] ?? null, ...$data, ...[$biaya_otomatis, $jenis_otomatis, 'DRAF', sekarang(), sekarang()]]);
+					q('INSERT INTO hki (pengguna_id, pengajuan_id, jenis_ciptaan, judul, uraian, tanggal_umum, tempat_umum, pencipta, pemegang, tautan_contoh, kode_khusus, biaya, jenis_biaya, status, dibuat, diubah) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+						[$u['id'], $pj['id'] ?? null, ...$data, ...[$kode, $biaya_otomatis, $jenis_otomatis, 'DRAF', sekarang(), sekarang()]]);
 					$id = (int) db()->lastInsertId();
 					catat_hki($id, (int) $u['id'], 'Permohonan HKI dibuat' . ($pj ? ' untuk buku "' . $pj['judul'] . '"' : '') . '.', true);
 				}
@@ -524,6 +544,7 @@ function formulir_hki(array $u, ?array $h, ?array $pj, bool $post): void
 	$jenis_biaya = $h ? ($h['jenis_biaya'] ?? '') : $jenis_otomatis;
 	$ket_khusus = match ($jenis_biaya) {
 		'penulis' => ' <strong>Harga khusus penulis ' . e($GLOBALS['SITUS']['nama']) . '</strong>' . (harga_hki() > $biaya ? ' (harga umum ' . rupiah(harga_hki()) . ')' : '') . '.',
+		'kode' => ' <strong>Harga khusus dengan kode ' . e($kode) . '</strong>' . (harga_hki() > $biaya ? ' (harga umum ' . rupiah(harga_hki()) . ')' : '') . '.',
 		'manual' => ' Biaya ini sudah disesuaikan oleh admin.',
 		default => '',
 	};
@@ -588,6 +609,11 @@ function formulir_hki(array $u, ?array $h, ?array $pj, bool $post): void
 			<label for="tautan_contoh">Atau tautan contoh ciptaan <span class="catatan">(untuk lagu, video, aplikasi, atau berkas besar: Google Drive, YouTube, dll.)</span></label>
 			<input type="url" id="tautan_contoh" name="tautan_contoh" placeholder="https://" value="' . e($v['tautan_contoh']) . '">
 		</fieldset>
+		' . ($boleh_kode && $jenis_biaya !== 'penulis' ? '<fieldset><legend>Kode harga khusus</legend>
+			<label for="kode_khusus">Kode harga khusus <span class="catatan">(opsional, isi jika Anda mendapat kode dari kami)</span></label>
+			<input id="kode_khusus" name="kode_khusus" maxlength="30" autocomplete="off" style="text-transform:uppercase" value="' . e($kode) . '">
+			<p class="catatan">Kode yang berlaku mengubah biaya layanan menjadi ' . rupiah(harga_hki_penulis()) . '.</p>
+		</fieldset>' : '') . '
 		<label class="centang siap-terbit"><input type="checkbox" name="setuju" value="1"> Saya menyatakan data dan berkas di atas benar, dan karya ini adalah ciptaan asli para pencipta yang tercantum.</label>
 		<div class="formulir__tombol">
 			<button type="submit" name="aksi" value="kirim" class="tombol">' . ($perbaikan ? 'Kirim Perbaikan' : 'Kirim Permohonan') . '</button>
@@ -773,6 +799,24 @@ function unduh_berkas_hki(bool $post, string $id): void
 function admin_hki(bool $post): void
 {
 	wajib_masuk('admin');
+	if ($post) {
+		$aksi = $_POST['aksi'] ?? '';
+		if ($aksi === 'kode_baru') {
+			$kode = strtoupper(trim(input('kode')));
+			if (!preg_match('/^[A-Z0-9-]{3,30}$/', $kode)) {
+				pesan('Kode harus 3-30 karakter: huruf, angka, atau tanda hubung (mis. MHS2026).', 'galat');
+			} elseif (satu('SELECT id FROM hki_kode WHERE kode = ?', [$kode])) {
+				pesan('Kode ' . $kode . ' sudah ada.', 'galat');
+			} else {
+				q('INSERT INTO hki_kode (kode, keterangan, aktif, dibuat) VALUES (?, ?, 1, ?)', [$kode, mb_substr(input('keterangan'), 0, 150), sekarang()]);
+				pesan('Kode ' . $kode . ' dibuat. Bagikan ke pemohon yang berhak.');
+			}
+		} elseif ($aksi === 'kode_aktif') {
+			q('UPDATE hki_kode SET aktif = ? WHERE id = ?', [input('aktif') === '1' ? 1 : 0, (int) input('id')]);
+			pesan('Status kode diperbarui.');
+		}
+		arahkan('/admin/hki#kode-khusus');
+	}
 	$filter = (string) ($_GET['status'] ?? '');
 	$cari = trim((string) ($_GET['cari'] ?? ''));
 	$sql = "SELECT h.*, u.nama FROM hki h JOIN pengguna u ON u.id = h.pengguna_id WHERE h.status <> 'DRAF'";
@@ -807,8 +851,26 @@ function admin_hki(bool $post): void
 	<div class="kotak-status-grid">' . $kotak . '</div>
 	<form method="get" class="filter filter--admin"><label class="filter__isian"><span class="tersembunyi">Status</span><select name="status">' . $opsi . '</select></label><label class="filter__isian"><span class="tersembunyi">Cari</span><input type="search" name="cari" placeholder="Judul atau nama pemohon" value="' . e($cari) . '"></label><div class="filter__tombol"><button class="tombol" type="submit">Tampilkan</button></div></form>
 	' . ($baris ? '<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Judul</th><th>Pemohon</th><th>Jalur</th><th>Status</th><th>Diperbarui</th></tr></thead><tbody>' . $baris . '</tbody></table></div>' : '<p class="catatan">Tidak ada permohonan HKI.</p>') . '
-	<p class="catatan">Harga layanan HKI: umum ' . rupiah(harga_hki()) . ', penulis kami ' . rupiah(harga_hki_penulis()) . ' (ubah di <a href="' . e(url('/admin/pengaturan')) . '">Pengaturan</a>).</p></section>';
+	<p class="catatan">Harga layanan HKI: umum ' . rupiah(harga_hki()) . ', khusus ' . rupiah(harga_hki_penulis()) . ' (ubah di <a href="' . e(url('/admin/pengaturan')) . '">Pengaturan</a>).</p></section>
+	' . kelola_kode_hki();
 	tampil('Pengajuan HKI', $isi, ['panel' => menu_admin('/admin/hki')]);
+}
+
+/** Daftar kode harga khusus HKI dan formulir membuat kode baru. */
+function kelola_kode_hki(): string
+{
+	$baris = '';
+	foreach (semua('SELECT k.*, (SELECT COUNT(*) FROM hki h WHERE h.kode_khusus = k.kode AND h.status <> \'DRAF\') AS dipakai FROM hki_kode k ORDER BY k.aktif DESC, k.dibuat DESC') as $k) {
+		$baris .= '<tr><td><strong>' . e($k['kode']) . '</strong></td><td>' . e($k['keterangan']) . '</td><td class="angka">' . (int) $k['dipakai'] . '</td><td>' . ($k['aktif'] ? 'Aktif' : '<span class="catatan">Nonaktif</span>') . '</td><td><form method="post">' . csrf_field() . '<input type="hidden" name="aksi" value="kode_aktif"><input type="hidden" name="id" value="' . (int) $k['id'] . '"><input type="hidden" name="aktif" value="' . ($k['aktif'] ? '0' : '1') . '"><button type="submit" class="tombol tombol--kedua">' . ($k['aktif'] ? 'Nonaktifkan' : 'Aktifkan') . '</button></form></td></tr>';
+	}
+	return '<section class="panel" id="kode-khusus"><h2>Kode harga khusus</h2>
+	<p class="catatan">Bagikan kode ke kerabat, kolega, atau mahasiswa. Pemohon yang mengisi kode aktif di formulir HKI membayar ' . rupiah(harga_hki_penulis()) . ' (harga umum ' . rupiah(harga_hki()) . '). Penulis yang sudah menerbitkan buku di sini mendapat harga ini otomatis tanpa kode. Kode tidak tampil di halaman publik.</p>
+	' . ($baris ? '<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Kode</th><th>Untuk</th><th>Dipakai</th><th>Status</th><th></th></tr></thead><tbody>' . $baris . '</tbody></table></div>' : '<p class="catatan">Belum ada kode.</p>') . '
+	<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="kode_baru">
+		<div class="kolom-2"><div><label for="kode">Kode baru</label><input id="kode" name="kode" required maxlength="30" placeholder="mis. MHS2026" style="text-transform:uppercase"></div>
+		<div><label for="keterangan">Untuk siapa</label><input id="keterangan" name="keterangan" maxlength="150" placeholder="mis. Mahasiswa kelas Metodologi 2026"></div></div>
+		<button type="submit" class="tombol">Buat Kode</button>
+	</form></section>';
 }
 
 /** Teks siap salin untuk mengisi formulir e-Hak Cipta DJKI. */
