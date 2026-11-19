@@ -675,6 +675,13 @@ function admin_pengaturan(bool $post): void
 			if ($hki_penulis > 0) {
 				simpan_pengaturan('harga_hki_penulis', (string) $hki_penulis);
 			}
+			foreach (['buku' => WAKTU_TAHAP_BUKU, 'hki' => array_column(TAHAP_HKI, 2)] as $jenis => $bawaan) {
+				foreach (array_keys($bawaan) as $i) {
+					if (isset($_POST['waktu_' . $jenis . '_' . $i])) {
+						simpan_pengaturan('waktu_' . $jenis . '_' . $i, trim(mb_substr(input('waktu_' . $jenis . '_' . $i), 0, 40)));
+					}
+				}
+			}
 			foreach (array_keys(LAYANAN_PUBLIK) as $jenis) {
 				simpan_pengaturan('tampil_layanan_' . $jenis, empty($_POST['tampil_layanan_' . $jenis]) ? '0' : '1');
 			}
@@ -718,6 +725,11 @@ function admin_pengaturan(bool $post): void
 			<label for="harga_hki_penulis">Harga khusus HKI (Rp)</label>
 			<input id="harga_hki_penulis" name="harga_hki_penulis" inputmode="numeric" data-rupiah value="' . e((string) harga_hki_penulis()) . '">
 			<p class="catatan">Berlaku otomatis untuk penulis yang punya pengajuan buku di sini dan biaya awalnya sudah diterima (Paket Aksara, Digital, atau lainnya), dan untuk pemohon yang mengisi <a href="' . e(url('/admin/hki#kode-khusus')) . '">kode harga khusus</a> (kerabat, kolega, mahasiswa). HKI di Paket Pustaka tetap tanpa biaya tambahan. Biaya satu permohonan juga bisa diubah dari halaman detail HKI sebelum dibayar.</p>
+		</fieldset>
+		<fieldset><legend>Waktu kerja tiap tahap</legend>
+			<p class="catatan">Tampil di bawah setiap tahap pada progres pengajuan (penulis dan admin), sesuai SOP. Kosongkan bila tidak ingin ditampilkan. Contoh: 1 hari kerja, 7–9 hari kerja.</p>
+			<div class="kolom-2"><div><p><strong>Penerbitan buku</strong></p>' . implode('', array_map(fn ($i, $t) => '<label for="waktu_buku_' . $i . '">' . e($t[0]) . '</label><input id="waktu_buku_' . $i . '" name="waktu_buku_' . $i . '" maxlength="40" value="' . e(waktu_tahap('buku', $i, WAKTU_TAHAP_BUKU[$i])) . '">', array_keys(TAHAP_TAMPIL), TAHAP_TAMPIL)) . '</div>
+			<div><p><strong>Layanan HKI</strong></p>' . implode('', array_map(fn ($i, $t) => '<label for="waktu_hki_' . $i . '">' . e($t[0]) . '</label><input id="waktu_hki_' . $i . '" name="waktu_hki_' . $i . '" maxlength="40" value="' . e(waktu_tahap('hki', $i, $t[2])) . '">', array_keys(TAHAP_HKI), TAHAP_HKI)) . '</div></div>
 		</fieldset>
 		<fieldset><legend>Halaman layanan publik</legend>
 			<p class="catatan">Perpustakaan Nasional melarang website penerbit mempromosikan jasa/fasilitas pencantuman ISBN. Karena itu halaman di bawah <strong>disembunyikan</strong> dari menu dan footer, dan alamatnya menampilkan "Halaman tidak ditemukan". Panel penulis, admin, dan keuangan tetap berjalan. Selama semuanya disembunyikan, pendaftaran akun mandiri ditutup; buat akun penulis di menu <a href="' . e(url('/admin/pengguna')) . '">Pengguna</a>.</p>

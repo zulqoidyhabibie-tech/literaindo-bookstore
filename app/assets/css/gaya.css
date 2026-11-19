@@ -1263,6 +1263,14 @@ ul.pesan {
 	text-underline-offset: 4px;
 }
 
+.stepper__waktu {
+	display: block;
+	margin-top: 0.15rem;
+	font-size: 0.85em;
+	font-weight: 400;
+	color: var(--redup);
+}
+
 .stepper li.selesai.dipilih::before {
 	box-shadow: 0 0 0 4px color-mix(in srgb, #1f9e55 25%, transparent);
 }

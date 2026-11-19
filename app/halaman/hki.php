@@ -631,13 +631,24 @@ nomori();})();</script>';
 	tampil($judul, $isi, ['panel' => menu_pengaju($h ? '' : '/akun/hki')]);
 }
 
+/** Tahap HKI dan target waktu kerjanya (sesuai SOP). Nomor urut = kunci pengaturan waktu_hki_N. */
+const TAHAP_HKI = [
+	['Isi data', ['DRAF'], 'Oleh pemohon'],
+	['Pembayaran', ['MENUNGGU_BAYAR', 'VERIFIKASI_BAYAR'], '1 hari kerja'],
+	['Pemeriksaan', ['DIPERIKSA', 'PERLU_PERBAIKAN'], '2 hari kerja'],
+	['Pendaftaran DJKI', ['DIAJUKAN'], '2–4 hari kerja'],
+	['Sertifikat', ['SELESAI'], '1 hari kerja'],
+];
+
 function stepper_hki(array $h): string
 {
-	$tahap = [['Isi data', ['DRAF']]];
-	if ((int) $h['biaya'] > 0) {
-		$tahap[] = ['Pembayaran', ['MENUNGGU_BAYAR', 'VERIFIKASI_BAYAR']];
+	$tahap = [];
+	foreach (TAHAP_HKI as $k => [$label, $daftar, $waktu]) {
+		if ($k === 1 && (int) $h['biaya'] <= 0) {
+			continue;
+		}
+		$tahap[] = [$label, $daftar, waktu_tahap('hki', $k, $waktu)];
 	}
-	array_push($tahap, ['Pemeriksaan', ['DIPERIKSA', 'PERLU_PERBAIKAN']], ['Pendaftaran DJKI', ['DIAJUKAN']], ['Sertifikat', ['SELESAI']]);
 	$posisi = 0;
 	foreach ($tahap as $i => [, $daftar]) {
 		if (in_array($h['status'], $daftar, true)) {
@@ -648,9 +659,9 @@ function stepper_hki(array $h): string
 		$posisi = count($tahap);
 	}
 	$out = '<ol class="stepper">';
-	foreach ($tahap as $i => [$label]) {
+	foreach ($tahap as $i => [$label, , $waktu]) {
 		$kelas = $i < $posisi ? 'selesai' : ($i === $posisi ? 'sekarang' : '');
-		$out .= '<li class="' . $kelas . '"' . ($i === $posisi ? ' aria-current="step"' : '') . '>' . e($label) . '</li>';
+		$out .= '<li class="' . $kelas . '"' . ($i === $posisi ? ' aria-current="step"' : '') . '>' . e($label) . label_waktu_tahap($waktu) . '</li>';
 	}
 	return $out . '</ol>';
 }
