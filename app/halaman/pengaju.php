@@ -291,23 +291,92 @@ function pilih_kartu(string $nama, string $judul, array $opsi, string $terpilih)
 	return $out . '</div></fieldset>';
 }
 
-function stepper(string $status): string
+/** Indeks tahap (0-5) tempat status berada. SELESAI dianggap di tahap terakhir. */
+function posisi_tahap(string $status): int
 {
-	$posisi = 0;
 	foreach (TAHAP_TAMPIL as $i => [, $daftar]) {
 		if (in_array($status, $daftar, true)) {
-			$posisi = $i;
+			return $i;
 		}
 	}
-	if ($status === 'SELESAI') {
-		$posisi = count(TAHAP_TAMPIL);
-	}
-	$out = '<ol class="stepper">';
+	return 0;
+}
+
+/** Tahap yang sedang dibuka: ?tahap=N (hanya tahap yang sudah dicapai), selain itu tahap sekarang. */
+function tahap_dipilih(string $status): int
+{
+	$sekarang = posisi_tahap($status);
+	$minta = filter_var($_GET['tahap'] ?? '', FILTER_VALIDATE_INT);
+	return is_int($minta) && $minta >= 0 && $minta <= $sekarang ? $minta : $sekarang;
+}
+
+/**
+ * Langkah-langkah pengajuan. Bila $tautan diisi, tahap yang sudah dicapai
+ * bisa diklik untuk membuka halamannya ($tautan . '?tahap=N').
+ */
+function stepper(string $status, string $tautan = '', ?int $dipilih = null): string
+{
+	$posisi = posisi_tahap($status);
+	$selesai_semua = $status === 'SELESAI';
+	$out = '<ol class="stepper' . ($tautan !== '' ? ' stepper--tautan' : '') . '">';
 	foreach (TAHAP_TAMPIL as $i => [$label]) {
-		$kelas = $i < $posisi ? 'selesai' : ($i === $posisi ? 'sekarang' : '');
-		$out .= '<li class="' . $kelas . '"' . ($i === $posisi ? ' aria-current="step"' : '') . '>' . e($label) . '</li>';
+		$kelas = ($i < $posisi || $selesai_semua) ? 'selesai' : ($i === $posisi ? 'sekarang' : '');
+		if ($dipilih === $i) {
+			$kelas .= ' dipilih';
+		}
+		$teks = e($label);
+		if ($tautan !== '' && $i <= $posisi) {
+			$teks = '<a href="' . e(url($tautan . ($i === $posisi ? '' : '?tahap=' . $i))) . '"' . ($dipilih === $i ? ' aria-current="page"' : '') . '>' . $teks . '</a>';
+		}
+		$out .= '<li class="' . trim($kelas) . '"' . ($i === $posisi && !$selesai_semua ? ' aria-current="step"' : '') . '>' . $teks . '</li>';
 	}
 	return $out . '</ol>';
+}
+
+/**
+ * Bingkai halaman satu tahap. Tahap sekarang disorot; tahap yang sudah lewat
+ * diberi tautan kembali ke tahap sekarang.
+ */
+function halaman_tahap(int $i, string $status, string $isi, string $tautan, string $kelas_sekarang = 'kotak-langkah'): string
+{
+	$sekarang = posisi_tahap($status);
+	$lewat = $i < $sekarang;
+	$judul = 'Tahap ' . ($i + 1) . ': ' . e(TAHAP_TAMPIL[$i][0]);
+	return '<div class="' . ($lewat ? 'kotak-langkah kotak-langkah--lewat' : $kelas_sekarang) . '" id="tahap">'
+		. '<div class="judul-tahap"><h2>' . $judul . '</h2>' . ($lewat ? '<span class="lencana lencana--selesai">Sudah selesai</span>' : '') . '</div>'
+		. $isi
+		. ($lewat ? '<p class="kembali-tahap"><a href="' . e(url($tautan)) . '">Kembali ke tahap sekarang: ' . e(TAHAP_TAMPIL[$sekarang][0]) . ' →</a></p>' : '')
+		. '</div>';
+}
+
+/** Riwayat & pesan dalam bentuk lipatan, supaya halaman tahap tetap ringkas. */
+function lipatan_riwayat(int $pid, bool $buka): string
+{
+	$n = (int) (satu('SELECT COUNT(*) AS n FROM catatan WHERE pengajuan_id = ?', [$pid])['n'] ?? 0);
+	return '<details class="kotak-langkah lipatan-riwayat"' . ($buka ? ' open' : '') . '><summary><strong>Riwayat &amp; pesan</strong> <span class="catatan">(' . $n . ')</span></summary>' . form_catatan() . riwayat($pid) . '</details>';
+}
+
+/** Daftar berkas pengajuan untuk jenis tertentu saja. */
+function daftar_berkas_jenis(int $id, array $jenis): string
+{
+	$out = '';
+	foreach (semua('SELECT * FROM berkas WHERE pengajuan_id = ? ORDER BY id DESC', [$id]) as $b) {
+		if (in_array($b['jenis'], $jenis, true)) {
+			$out .= '<li><a href="' . e(url('/berkas/' . $b['id'])) . '">' . ikon('unduh') . e(JENIS_BERKAS[$b['jenis']][0] ?? $b['jenis']) . '</a> <span class="catatan">' . e($b['nama_asli']) . ' · ' . ukuran_berkas((int) $b['ukuran']) . ' · ' . e(tanggal($b['dibuat'])) . '</span></li>';
+		}
+	}
+	return $out ? '<ul class="daftar-berkas">' . $out . '</ul>' : '<p class="catatan">Belum ada berkas.</p>';
+}
+
+/** Bukti bayar terakhir untuk tahap pembayaran 1 atau 2. */
+function ringkas_bayar(int $pid, int $tahap): string
+{
+	$b = satu('SELECT py.*, b.id AS bid FROM pembayaran py LEFT JOIN berkas b ON b.id = py.berkas_id WHERE py.pengajuan_id = ? AND py.tahap = ? ORDER BY py.id DESC LIMIT 1', [$pid, $tahap]);
+	if (!$b) {
+		return '';
+	}
+	return '<p>Nominal: <strong>' . rupiah($b['nominal']) . '</strong> · diunggah ' . e(tanggal($b['dibuat']))
+		. ($b['bid'] ? ' · <a href="' . e(url('/berkas/' . $b['bid'])) . '" target="_blank">lihat bukti bayar</a>' : '') . '</p>';
 }
 
 function daftar_berkas(int $id): string
@@ -395,7 +464,7 @@ function pengaju_detail(bool $post, string $id): void
 		'MENUNGGU_BAYAR_1' => pembayaran_ditolak($pid, 1) . '<div class="tagihan"><div><p>Biaya awal penerbitan</p><p class="tagihan__nominal">' . rupiah($biaya_awal) . '</p><p class="catatan">Pindai QRIS dari aplikasi bank atau dompet digital apa pun, bayar tepat sesuai nominal, lalu unggah bukti bayarnya. Biaya ini tidak dapat dikembalikan.</p>' . form_bukti(1) . '</div>' . blok_qris($biaya_awal) . '</div>',
 		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => '<p>Bukti pembayaran Anda sedang dicek bagian keuangan, biasanya dalam 1×24 jam kerja.</p>',
 		'DITINJAU' => '<p>Naskah sedang diproses redaksi: penyuntingan, tata letak, dan desain sampul. Admin akan menghubungi Anda bila ada catatan.</p>',
-		'PERLU_REVISI' => '<p>Redaksi meminta perbaikan naskah. Baca catatan di bagian Riwayat, lalu kirim naskah revisi.</p><p><a class="tombol" href="' . e(url("/akun/pengajuan/$pid/ubah")) . '">Kirim Naskah Revisi</a></p>',
+		'PERLU_REVISI' => '<p>Redaksi meminta perbaikan naskah. Baca catatan di bagian Riwayat &amp; pesan di bawah, lalu kirim naskah revisi.</p><p><a class="tombol" href="' . e(url("/akun/pengajuan/$pid/ubah")) . '">Kirim Naskah Revisi</a></p>',
 		'PROSES_ISBN' => '<p>Naskah selesai diproses dan sedang diajukan ISBN ke Perpustakaan Nasional.</p>' . ($buku ? '<p>Halaman buku Anda: <a href="' . e(url(buku_url($buku))) . '">' . e(url_absolut(buku_url($buku))) . '</a></p>' : '')
 			. ($p['tagihan_2'] ? '<p class="catatan">Tagihan pelunasan ' . rupiah($p['tagihan_2']) . ' dibayar setelah ISBN terbit.</p>' : ''),
 		'MENUNGGU_BAYAR_2' => pembayaran_ditolak($pid, 2) . '<div class="tagihan"><div><p>Pelunasan biaya cetak</p><p class="tagihan__nominal">' . rupiah($p['tagihan_2']) . '</p><p class="catatan">' . e($p['jumlah_cetak'] . ' eksemplar' . ($p['rincian_tagihan_2'] ? ' · ' . $p['rincian_tagihan_2'] : '')) . '</p><p class="catatan">Spesifikasi: ' . e(ringkas_cetak($p)) . '</p>' . form_bukti(2) . '</div>' . blok_qris((int) $p['tagihan_2']) . '</div>',
@@ -406,24 +475,51 @@ function pengaju_detail(bool $post, string $id): void
 	};
 
 	$isbn = $buku && $buku['isbn'] ? '<div><dt>ISBN</dt><dd>' . e($buku['isbn']) . '</dd></div>' : '';
-	$isi = '<section class="panel">
-	<p><a href="' . e(url('/akun')) . '">← Pengajuan Saya</a></p>
-	<div class="judul-baris"><h1>' . e($p['judul']) . '</h1>' . label_status($p['status']) . '</div>
-	' . ($p['status'] !== 'DITOLAK' ? stepper($p['status']) : '') . '
-	<div class="kotak-langkah"><h2>Langkah berikutnya</h2>' . $langkah . '</div>
-	' . kotak_hki_pengajuan($p) . '
-	<div class="dua-kolom">
-		<section><h2>Data buku</h2><dl class="data-ringkas">
+	$isbn .= $buku && ($buku['eisbn'] ?? '') !== '' ? '<div><dt>e-ISBN</dt><dd>' . e($buku['eisbn']) . '</dd></div>' : '';
+	$data_buku = '<div class="dua-kolom">
+		<section><h3>Data buku</h3><dl class="data-ringkas">
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
 			<div><dt>Jenis ISBN</dt><dd>' . e(FORMAT_TERBIT[$p['format_terbit'] ?? 'cetak'][0] ?? '-') . '</dd></div>
 			<div><dt>Paket</dt><dd>' . e(PAKET[$p['paket']][0] ?? '-') . '</dd></div>
 			' . data_cetak($p) . '
 			<div><dt>Jumlah cetak</dt><dd>' . (($p['format_terbit'] ?? 'cetak') === 'ebook' ? 'Tanpa cetak (e-book)' : e((string) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta'])) . ' eksemplar') . '</dd></div>' . $isbn . '
-		</dl>
-		<h2>Berkas</h2>' . daftar_berkas($pid) . '</section>
-		<section><h2>Riwayat &amp; pesan</h2>' . form_catatan() . riwayat($pid) . '</section>
-	</div>
+		</dl></section>
+		<section><h3>Berkas</h3>' . daftar_berkas($pid) . '</section>
+	</div>';
+
+	$tautan = '/akun/pengajuan/' . $pid;
+	$status = $p['status'];
+	if ($status === 'DITOLAK') {
+		$halaman = '<div class="kotak-langkah"><h2>Pengajuan ditolak</h2>' . $langkah . $data_buku . '</div>';
+	} else {
+		$sekarang = posisi_tahap($status);
+		$dipilih = tahap_dipilih($status);
+		// Ringkasan tahap yang sudah lewat.
+		$lewat = [
+			0 => '<p>Pengajuan sudah dikirim.</p>',
+			1 => '<p>Biaya awal ' . rupiah($biaya_awal) . ' sudah diterima.</p>' . ringkas_bayar($pid, 1),
+			2 => '<p>Naskah sudah disetujui redaksi.</p>' . ($p['tagihan_2'] ? '<p>Tagihan pelunasan: <strong>' . rupiah($p['tagihan_2']) . '</strong>' . ($p['jumlah_cetak'] ? ' (' . e((string) $p['jumlah_cetak']) . ' eksemplar)' : '') . '</p>' : ''),
+			3 => '<p>ISBN sudah terbit.</p>' . ($isbn ? '<dl class="data-ringkas">' . $isbn . '</dl>' : '') . ($buku ? '<p>Halaman buku: <a href="' . e(url(buku_url($buku))) . '">' . e(url_absolut(buku_url($buku))) . '</a></p>' : ''),
+			4 => '<p>Pelunasan ' . rupiah($p['tagihan_2']) . ' sudah diterima.</p>' . ringkas_bayar($pid, 2),
+		];
+		if ($dipilih === $sekarang) {
+			$isi_tahap = $langkah . kotak_hki_pengajuan($p);
+		} else {
+			$isi_tahap = $lewat[$dipilih] ?? '';
+		}
+		if ($dipilih === 0) {
+			$isi_tahap .= $data_buku;
+		}
+		$halaman = halaman_tahap($dipilih, $status, $isi_tahap, $tautan);
+	}
+
+	$isi = '<section class="panel">
+	<p><a href="' . e(url('/akun')) . '">← Pengajuan Saya</a></p>
+	<div class="judul-baris"><h1>' . e($p['judul']) . '</h1>' . label_status($p['status']) . '</div>
+	' . ($status !== 'DITOLAK' ? stepper($status, $tautan, $dipilih) : '') . '
+	' . $halaman . '
+	' . lipatan_riwayat($pid, in_array($status, ['PERLU_REVISI', 'DITOLAK'], true)) . '
 </section>';
 	tampil($p['judul'], $isi, ['panel' => menu_pengaju('')]);
 }

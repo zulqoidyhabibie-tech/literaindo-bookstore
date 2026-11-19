@@ -331,7 +331,7 @@ function admin_pengajuan_detail(bool $post, string $id): void
 	}
 	$li .= '<li class="' . ($buku ? 'ada' : 'belum') . '"><span class="periksa__tanda" aria-hidden="true">' . ($buku ? '✓' : '') . '</span><span><strong>h.</strong> Link katalog buku di website'
 		. ($buku ? ' · <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a>' : ' · <em>dibuat saat tagihan pelunasan ditetapkan</em>') . '</span></li>';
-	$kotak_isbn = $p['status'] === 'DRAF' ? '' : '<div class="kotak-langkah"><h2>Berkas ISBN</h2>
+	$kotak_isbn = $p['status'] === 'DRAF' ? '' : '<div class="kotak-dalam"><h3>Berkas ISBN</h3>
 		<p class="catatan">Jenis karya: <strong>' . e($jk[0]) . '</strong>. Lengkapi semua butir sebelum mengajukan ke isbn.perpusnas.go.id.</p>
 		<ul class="periksa">' . $li . '</ul>
 		<details><summary>Unggah berkas a, b, c</summary><form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="berkas_isbn">
@@ -344,35 +344,70 @@ function admin_pengajuan_detail(bool $post, string $id): void
 		$aksi .= '<details class="bahaya"><summary>Tolak pengajuan</summary>' . $form('tolak', $catatan_input('Alasan penolakan (dikirim ke penulis)', 'c-tolak'), 'Tolak Pengajuan', 'tombol tombol--bahaya') . '</details>';
 	}
 
-	$isi = '<section class="panel">
-	<p><a href="' . e(url('/admin/pengajuan')) . '">← Semua pengajuan</a></p>
-	<div class="judul-baris"><h1>' . e($p['judul']) . '</h1>' . label_status($p['status']) . '</div>
-	' . ($p['status'] !== 'DITOLAK' ? stepper($p['status']) : '') . '
-	<div class="kotak-langkah kotak-langkah--admin"><h2>Tindakan</h2>' . $aksi . '</div>
-	' . $kotak_isbn . '
-	<div class="dua-kolom">
-		<section><h2>Pengaju</h2><dl class="data-ringkas">
+	$hki = hki_pengajuan($pid);
+	$data_pengajuan = '<div class="dua-kolom">
+		<section><h3>Pengaju</h3><dl class="data-ringkas">
 			<div><dt>Nama</dt><dd>' . e($pengaju['nama']) . '</dd></div>
 			<div><dt>Email</dt><dd>' . e($pengaju['email']) . '</dd></div>
 			<div><dt>WhatsApp</dt><dd><a href="https://wa.me/' . e(preg_replace('/^0/', '62', (string) preg_replace('/\D/', '', $pengaju['whatsapp']))) . '" target="_blank">' . e($pengaju['whatsapp']) . '</a></dd></div>
 		</dl>
-		<h2>Data buku</h2><dl class="data-ringkas">
+		<h3>Data buku</h3><dl class="data-ringkas">
 			<div><dt>Subjudul</dt><dd>' . e($p['subjudul']) . '</dd></div>
 			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
 			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
 			<div><dt>Jenis karya</dt><dd>' . e($jk[0]) . '</dd></div>
 			<div><dt>Jenis ISBN</dt><dd>' . e(FORMAT_TERBIT[$p['format_terbit'] ?? 'cetak'][0] ?? '-') . '</dd></div>
 			<div><dt>Paket</dt><dd>' . e(PAKET[$p['paket']][0] ?? '-') . '</dd></div>
-			' . (($hki = hki_pengajuan($pid)) ? '<div><dt>HKI</dt><dd><a href="' . e(url('/admin/hki/' . $hki['id'])) . '">' . e(STATUS_HKI[$hki['status']][0]) . '</a></dd></div>' : (($p['paket'] ?? '') === 'pustaka' ? '<div><dt>HKI</dt><dd>Termasuk paket; penulis belum mengisi data HKI</dd></div>' : '')) . '
+			' . ($hki ? '<div><dt>HKI</dt><dd><a href="' . e(url('/admin/hki/' . $hki['id'])) . '">' . e(STATUS_HKI[$hki['status']][0]) . '</a></dd></div>' : (($p['paket'] ?? '') === 'pustaka' ? '<div><dt>HKI</dt><dd>Termasuk paket; penulis belum mengisi data HKI</dd></div>' : '')) . '
 			' . data_cetak($p) . '
 			<div><dt>Perkiraan halaman</dt><dd>' . e((string) $p['perkiraan_halaman']) . '</dd></div>
 			<div><dt>Cetak diminta</dt><dd>' . e((string) $p['jumlah_cetak_diminta']) . ' eksemplar</dd></div>
 			' . ($p['tagihan_2'] ? '<div><dt>Pelunasan</dt><dd>' . rupiah($p['tagihan_2']) . ' (' . e((string) $p['jumlah_cetak']) . ' eks.)</dd></div>' : '') . '
-		</dl>
-		<h3>Sinopsis</h3><p>' . nl2br(e($p['sinopsis'])) . '</p>
-		<h2>Berkas</h2>' . daftar_berkas($pid) . '</section>
-		<section><h2>Riwayat &amp; pesan</h2>' . form_catatan() . riwayat($pid) . '</section>
-	</div>
+		</dl></section>
+		<section><h3>Sinopsis</h3><p>' . nl2br(e($p['sinopsis'])) . '</p>
+		<h3>Berkas</h3>' . daftar_berkas($pid) . '</section>
+	</div>';
+
+	$tautan = '/admin/pengajuan/' . $pid;
+	$status = $p['status'];
+	$berkas_naskah = '<h3>Berkas naskah</h3>' . daftar_berkas_jenis($pid, ['naskah', 'sampul', 'pernyataan', 'izin_terjemah', 'pengalihan', 'keterangan_pd']);
+	$nomor_isbn = $buku ? implode('', array_filter([
+		($buku['isbn'] ?? '') !== '' ? '<div><dt>ISBN</dt><dd>' . e($buku['isbn']) . '</dd></div>' : '',
+		($buku['eisbn'] ?? '') !== '' ? '<div><dt>e-ISBN</dt><dd>' . e($buku['eisbn']) . '</dd></div>' : '',
+	])) : '';
+	if ($status === 'DITOLAK') {
+		$halaman = '<div class="kotak-langkah kotak-langkah--admin"><h2>Pengajuan ditolak</h2>' . $aksi . $data_pengajuan . '</div>';
+	} else {
+		$sekarang = posisi_tahap($status);
+		$dipilih = tahap_dipilih($status);
+		if ($dipilih === $sekarang) {
+			// Tahap sekarang: tindakan admin beserta bahan yang dibutuhkan di tahap ini.
+			$tambahan = [
+				0 => $data_pengajuan,
+				2 => $berkas_naskah,
+				3 => $kotak_isbn,
+			];
+			$isi_tahap = $aksi . ($tambahan[$dipilih] ?? '');
+		} else {
+			$lewat = [
+				0 => '<p>Pengajuan dikirim penulis.</p>' . $data_pengajuan,
+				1 => '<p>Biaya awal sudah diterima.</p>' . $bukti(1),
+				2 => '<p>Naskah sudah disetujui dan tagihan pelunasan ditetapkan' . ($p['tagihan_2'] ? ': <strong>' . rupiah($p['tagihan_2']) . '</strong> (' . e((string) $p['jumlah_cetak']) . ' eks.)' : '') . '.</p>'
+					. ($buku ? '<p>Halaman buku: <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a></p>' : '') . $berkas_naskah,
+				3 => '<p>ISBN sudah terbit.</p>' . ($nomor_isbn ? '<dl class="data-ringkas">' . $nomor_isbn . '</dl>' : '') . $kotak_isbn,
+				4 => '<p>Pelunasan sudah diterima.</p>' . $bukti(2),
+			];
+			$isi_tahap = $lewat[$dipilih] ?? '';
+		}
+		$halaman = halaman_tahap($dipilih, $status, $isi_tahap, $tautan, 'kotak-langkah kotak-langkah--admin');
+	}
+
+	$isi = '<section class="panel">
+	<p><a href="' . e(url('/admin/pengajuan')) . '">← Semua pengajuan</a></p>
+	<div class="judul-baris"><h1>' . e($p['judul']) . '</h1>' . label_status($status) . '</div>
+	' . ($status !== 'DITOLAK' ? stepper($status, $tautan, $dipilih) : '') . '
+	' . $halaman . '
+	' . lipatan_riwayat($pid, false) . '
 </section>';
 	tampil($p['judul'], $isi, ['panel' => menu_admin('/admin/pengajuan')]);
 }
