@@ -3911,3 +3911,247 @@ fieldset.serah legend {
 	color: var(--redup);
 	font-size: 0.92rem;
 }
+
+/* ---------- Pengaturan: tab + kartu ---------- */
+.panel-atur h1 {
+	margin-bottom: 1rem;
+}
+
+.ringkas-atur {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	gap: 0.6rem;
+	margin-bottom: 1.1rem;
+}
+
+.ringkas-atur a {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	padding: 0.7rem 0.9rem;
+	border: 1px solid var(--garis);
+	border-radius: 12px;
+	background: var(--hijau-muda, #eef5f1);
+	color: var(--teks);
+	text-decoration: none;
+}
+
+.ringkas-atur span {
+	font-size: 0.8rem;
+	color: var(--redup);
+}
+
+.ringkas-atur strong {
+	font-size: 1rem;
+}
+
+.ringkas-atur .ok {
+	color: var(--warna-utama);
+}
+
+.ringkas-atur .awas {
+	color: var(--segera);
+}
+
+.tab-atur {
+	display: flex;
+	gap: 0.3rem;
+	overflow-x: auto;
+	border-bottom: 1px solid var(--garis);
+	margin-bottom: 1.1rem;
+	scrollbar-width: none;
+}
+
+.tab-atur a {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.55rem 0.8rem;
+	border-bottom: 3px solid transparent;
+	color: var(--redup);
+	font-size: 0.92rem;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.tab-atur a .ikon {
+	width: 17px;
+	height: 17px;
+}
+
+.tab-atur a:hover {
+	color: var(--warna-utama);
+}
+
+.tab-atur a[aria-current="page"] {
+	color: var(--warna-utama);
+	border-bottom-color: var(--warna-utama);
+}
+
+.kisi-atur {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+	gap: 0.75rem;
+	margin-bottom: 0.75rem;
+}
+
+.kisi-atur--2 {
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.kartu-atur {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding: 0.85rem 0.95rem;
+	border: 1px solid var(--garis);
+	border-radius: 12px;
+	background: #fff;
+}
+
+.kartu-atur h3 {
+	margin: 0;
+	font-family: inherit;
+	font-size: 0.95rem;
+	font-weight: 700;
+}
+
+.kartu-atur h3 label {
+	font-weight: inherit;
+	margin: 0;
+}
+
+.formulir-atur .catatan,
+.kartu-atur .catatan {
+	margin: 0;
+	font-size: 0.82rem;
+	line-height: 1.45;
+}
+
+.formulir-atur input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.formulir-atur select,
+.formulir-atur textarea {
+	min-height: 38px;
+	padding: 0.4rem 0.65rem;
+	font-size: 0.95rem;
+}
+
+.daftar-waktu {
+	display: grid;
+	grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+	gap: 0.35rem 0.6rem;
+	align-items: center;
+}
+
+.daftar-waktu label {
+	margin: 0;
+	font-size: 0.86rem;
+	font-weight: 500;
+}
+
+.isian-atur {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.isian-atur label {
+	margin: 0;
+	font-size: 0.88rem;
+}
+
+.kartu-saklar {
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 0.7rem;
+	cursor: pointer;
+}
+
+.kartu-saklar input {
+	width: 20px;
+	height: 20px;
+	margin-top: 0.15rem;
+	accent-color: var(--warna-utama);
+}
+
+.kartu-atur .qris {
+	margin: 0;
+}
+
+.kartu-atur .qris img {
+	max-width: 180px;
+}
+
+.bilah-simpan {
+	position: sticky;
+	bottom: 0.75rem;
+	z-index: 30;
+	display: none;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	margin-top: 1rem;
+	padding: 0.6rem 0.6rem 0.6rem 1rem;
+	border-radius: 12px;
+	background: var(--tinta);
+	color: #fff;
+	font-size: 0.9rem;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.formulir-atur.berubah .bilah-simpan {
+	display: flex;
+}
+
+.bilah-simpan .tombol {
+	background: var(--aksen);
+	border-color: var(--aksen);
+	color: #1d1600;
+}
+
+@media (max-width: 760px) {
+	.bilah-simpan {
+		bottom: calc(var(--tinggi-bawah, 0px) + env(safe-area-inset-bottom) + 0.5rem);
+	}
+
+	.daftar-waktu {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.daftar-waktu input {
+		margin-bottom: 0.35rem;
+	}
+}
+
+.formulir.formulir-atur {
+	max-width: none;
+}
+
+.daftar-waktu input {
+	min-width: 0;
+}
+
+@media (max-width: 760px) {
+	.ringkas-atur {
+		grid-template-columns: 1fr 1fr;
+		gap: 0.45rem;
+	}
+
+	.ringkas-atur a {
+		padding: 0.5rem 0.7rem;
+	}
+
+	.ringkas-atur a:nth-child(2) {
+		grid-column: 1 / -1;
+		order: 3;
+	}
+
+	.ringkas-atur strong {
+		font-size: 0.92rem;
+	}
+}
+
+.formulir.formulir-email {
+	max-width: 640px;
+}

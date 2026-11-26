@@ -755,110 +755,134 @@ function kembali_ke_admin(bool $post): void
 	arahkan('/admin/pengguna/' . $uid);
 }
 
+const TAB_PENGATURAN = [
+	'harga'     => ['Harga & Paket', 'harga'],
+	'hki'       => ['HKI', 'hki'],
+	'waktu'     => ['Waktu Kerja', 'tahun'],
+	'layanan'   => ['Layanan Publik', 'halaman'],
+	'identitas' => ['Identitas Situs', 'penerbit'],
+	'qris'      => ['QRIS', 'uang'],
+	'email'     => ['Email', 'surat'],
+];
+
 function admin_pengaturan(bool $post): void
 {
 	global $SITUS;
 	$admin = wajib_masuk('admin');
 	if ($post && input('aksi') === 'email') {
 		simpan_pengaturan_email($admin);
-		arahkan('/admin/pengaturan#email');
+		arahkan('/admin/pengaturan?tab=email');
 	}
+	$tab = isset(TAB_PENGATURAN[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'harga';
 	if ($post) {
+		$tab = isset(TAB_PENGATURAN[input('tab')]) ? input('tab') : 'harga';
+		$uang = fn (string $k) => (int) preg_replace('/\D/', '', input($k));
 		try {
-			$biaya = (int) preg_replace('/\D/', '', input('biaya_awal'));
-			if ($biaya < 1) {
-				throw new RuntimeException('Isi biaya awal.');
-			}
-			simpan_pengaturan('biaya_awal', (string) $biaya);
-			foreach (PAKET as [, , , $kunci]) {
-				$h = (int) preg_replace('/\D/', '', input($kunci));
-				if ($h > 0) {
-					simpan_pengaturan($kunci, (string) $h);
+			if ($tab === 'harga') {
+				if ($uang('biaya_awal') < 1) {
+					throw new RuntimeException('Isi biaya awal.');
 				}
-			}
-			simpan_pengaturan('batas_halaman_paket', (string) max(1, (int) input('batas_halaman_paket', '200')));
-			simpan_pengaturan('margin_cetak', (string) max(0, min(500, (int) input('margin_cetak', '30'))));
-			$hki = (int) preg_replace('/\D/', '', input('harga_hki'));
-			if ($hki > 0) {
-				simpan_pengaturan('harga_hki', (string) $hki);
-			}
-			$hki_penulis = (int) preg_replace('/\D/', '', input('harga_hki_penulis'));
-			if ($hki_penulis > 0) {
-				simpan_pengaturan('harga_hki_penulis', (string) $hki_penulis);
-			}
-			foreach (['buku' => WAKTU_TAHAP_BUKU, 'hki' => array_column(TAHAP_HKI, 2)] as $jenis => $bawaan) {
-				foreach (array_keys($bawaan) as $i) {
-					if (isset($_POST['waktu_' . $jenis . '_' . $i])) {
-						simpan_pengaturan('waktu_' . $jenis . '_' . $i, trim(mb_substr(input('waktu_' . $jenis . '_' . $i), 0, 40)));
+				simpan_pengaturan('biaya_awal', (string) $uang('biaya_awal'));
+				foreach (PAKET as [, , , $kunci]) {
+					if ($uang($kunci) > 0) {
+						simpan_pengaturan($kunci, (string) $uang($kunci));
 					}
 				}
-			}
-			foreach (array_keys(LAYANAN_PUBLIK) as $jenis) {
-				simpan_pengaturan('tampil_layanan_' . $jenis, empty($_POST['tampil_layanan_' . $jenis]) ? '0' : '1');
-			}
-			foreach (array_keys(IDENTITAS) as $k) {
-				if (!isset($_POST['situs_' . $k])) {
-					continue;
+				simpan_pengaturan('batas_halaman_paket', (string) max(1, (int) input('batas_halaman_paket', '200')));
+				simpan_pengaturan('margin_cetak', (string) max(0, min(500, (int) input('margin_cetak', '30'))));
+			} elseif ($tab === 'hki') {
+				foreach (['harga_hki', 'harga_hki_penulis'] as $k) {
+					if ($uang($k) > 0) {
+						simpan_pengaturan($k, (string) $uang($k));
+					}
 				}
-				$v = trim(mb_substr(input('situs_' . $k), 0, 500));
-				if ($k === 'email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) {
-					throw new RuntimeException('Alamat email tidak valid.');
+			} elseif ($tab === 'waktu') {
+				foreach (['buku' => WAKTU_TAHAP_BUKU, 'hki' => array_column(TAHAP_HKI, 2)] as $jenis => $bawaan) {
+					foreach (array_keys($bawaan) as $i) {
+						if (isset($_POST['waktu_' . $jenis . '_' . $i])) {
+							simpan_pengaturan('waktu_' . $jenis . '_' . $i, trim(mb_substr(input('waktu_' . $jenis . '_' . $i), 0, 40)));
+						}
+					}
 				}
-				simpan_pengaturan('situs_' . $k, $v);
-			}
-			$qris = unggah_sampul_katalog('qris');
-			if ($qris !== '') {
+			} elseif ($tab === 'layanan') {
+				foreach (array_keys(LAYANAN_PUBLIK) as $jenis) {
+					simpan_pengaturan('tampil_layanan_' . $jenis, empty($_POST['tampil_layanan_' . $jenis]) ? '0' : '1');
+				}
+			} elseif ($tab === 'identitas') {
+				foreach (array_keys(IDENTITAS) as $k) {
+					if (!isset($_POST['situs_' . $k])) {
+						continue;
+					}
+					$v = trim(mb_substr(input('situs_' . $k), 0, 500));
+					if ($k === 'email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) {
+						throw new RuntimeException('Alamat email tidak valid.');
+					}
+					simpan_pengaturan('situs_' . $k, $v);
+				}
+			} elseif ($tab === 'qris') {
+				$qris = unggah_sampul_katalog('qris');
+				if ($qris === '') {
+					throw new RuntimeException('Pilih gambar QRIS yang baru terlebih dahulu.');
+				}
 				simpan_pengaturan('qris_gambar', $qris);
 			}
-			pesan('Pengaturan tersimpan.');
+			pesan(TAB_PENGATURAN[$tab][0] . ' tersimpan.');
 		} catch (RuntimeException $ex) {
 			pesan($ex->getMessage(), 'galat');
 		}
-		arahkan('/admin/pengaturan');
+		arahkan('/admin/pengaturan?tab=' . $tab);
 	}
-	$isi = '<section class="panel panel--sempit"><h1>Pengaturan</h1>
-	<form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '
-		<label for="biaya_awal">Biaya awal pengajuan (Rp)</label>
-		<input id="biaya_awal" name="biaya_awal" inputmode="numeric" data-rupiah value="' . e(pengaturan('biaya_awal', '250000')) . '">
-		<p class="catatan">Biaya awal menjadi uang muka dan dipotong dari harga paket saat pelunasan.</p>
-		<fieldset><legend>Paket penerbitan</legend>
-			' . implode('', array_map(fn ($pk) => '<label for="' . $pk[3] . '">Harga ' . e($pk[0]) . ' (Rp) <span class="catatan">' . e($pk[5]) . '</span></label><input id="' . $pk[3] . '" name="' . $pk[3] . '" inputmode="numeric" data-rupiah value="' . e(pengaturan($pk[3], (string) $pk[4])) . '">', PAKET)) . '
-			<label for="batas_halaman_paket">Batas halaman buku standar paket</label>
-			<input id="batas_halaman_paket" name="batas_halaman_paket" type="number" min="1" value="' . e((string) batas_halaman_paket()) . '">
-			<label for="margin_cetak">Margin harga cetak per buku (%)</label>
-			<input id="margin_cetak" name="margin_cetak" type="number" min="0" max="500" value="' . e((string) margin_cetak()) . '">
-			<p class="catatan">Harga paket berlaku untuk buku A5, HVS hitam putih, soft cover, sampai batas halaman di atas. Buku yang lebih tebal atau spesifikasinya lain dikenai selisih biaya cetak. Harga cetak per buku = taksiran dari Harga Cetak + margin.</p>
-		</fieldset>
-		<fieldset><legend>Layanan HKI</legend>
-			<label for="harga_hki">Harga umum layanan HKI (Rp)</label>
-			<input id="harga_hki" name="harga_hki" inputmode="numeric" data-rupiah value="' . e((string) harga_hki()) . '">
-			<p class="catatan">Untuk pemohon yang belum menerbitkan buku di sini.</p>
-			<label for="harga_hki_penulis">Harga khusus HKI (Rp)</label>
-			<input id="harga_hki_penulis" name="harga_hki_penulis" inputmode="numeric" data-rupiah value="' . e((string) harga_hki_penulis()) . '">
-			<p class="catatan">Berlaku otomatis untuk penulis yang punya pengajuan buku di sini dan biaya awalnya sudah diterima (Paket Aksara, Digital, atau lainnya), dan untuk pemohon yang mengisi <a href="' . e(url('/admin/hki#kode-khusus')) . '">kode harga khusus</a> (kerabat, kolega, mahasiswa). HKI di Paket Pustaka tetap tanpa biaya tambahan. Biaya satu permohonan juga bisa diubah dari halaman detail HKI sebelum dibayar.</p>
-		</fieldset>
-		<fieldset><legend>Waktu kerja tiap tahap</legend>
-			<p class="catatan">Tampil di bawah setiap tahap pada progres pengajuan (penulis dan admin), sesuai SOP. Kosongkan bila tidak ingin ditampilkan. Contoh: 1 hari kerja, 7–9 hari kerja.</p>
-			<div class="kolom-2"><div><p><strong>Penerbitan buku</strong></p>' . implode('', array_map(fn ($i, $t) => '<label for="waktu_buku_' . $i . '">' . e($t[0]) . '</label><input id="waktu_buku_' . $i . '" name="waktu_buku_' . $i . '" maxlength="40" value="' . e(waktu_tahap('buku', $i, WAKTU_TAHAP_BUKU[$i])) . '">', array_keys(TAHAP_TAMPIL), TAHAP_TAMPIL)) . '</div>
-			<div><p><strong>Layanan HKI</strong></p>' . implode('', array_map(fn ($i, $t) => '<label for="waktu_hki_' . $i . '">' . e($t[0]) . '</label><input id="waktu_hki_' . $i . '" name="waktu_hki_' . $i . '" maxlength="40" value="' . e(waktu_tahap('hki', $i, $t[2])) . '">', array_keys(TAHAP_HKI), TAHAP_HKI)) . '</div></div>
-		</fieldset>
-		<fieldset><legend>Halaman layanan publik</legend>
-			<p class="catatan">Perpustakaan Nasional melarang website penerbit mempromosikan jasa/fasilitas pencantuman ISBN. Karena itu halaman di bawah <strong>disembunyikan</strong> dari menu dan footer, dan alamatnya menampilkan "Halaman tidak ditemukan". Panel penulis, admin, dan keuangan tetap berjalan. Selama semuanya disembunyikan, pendaftaran akun mandiri ditutup; buat akun penulis di menu <a href="' . e(url('/admin/pengguna')) . '">Pengguna</a>.</p>
-			' . implode('', array_map(fn ($jenis, $d) => '<label class="centang"><input type="checkbox" name="tampil_layanan_' . $jenis . '" value="1"' . (layanan_tampil($jenis) ? ' checked' : '') . '> Tampilkan: ' . e($d[0]) . '</label>', array_keys(LAYANAN_PUBLIK), LAYANAN_PUBLIK)) . '
-		</fieldset>
-		<fieldset><legend>Identitas website dan footer</legend>
-			' . implode('', array_map(fn ($k, $d) => '<label for="situs_' . $k . '">' . e($d[0]) . '</label>' . ($d[1] === 'textarea'
-				? '<textarea id="situs_' . $k . '" name="situs_' . $k . '" rows="3">' . e($SITUS[$k]) . '</textarea>'
-				: '<input id="situs_' . $k . '" name="situs_' . $k . '" value="' . e($SITUS[$k]) . '"' . ($k === 'email' ? ' type="email"' : '') . '>'), array_keys(IDENTITAS), IDENTITAS)) . '
-			<p class="catatan">Isi halaman Tentang Kami, Kontak, dan halaman lain diubah di menu <a href="' . e(url('/admin/halaman')) . '">Halaman Website</a>.</p>
-		</fieldset>
-		<label for="qris">Gambar QRIS (unggah untuk mengganti)</label>
-		' . blok_qris() . '
-		<input type="file" id="qris" name="qris" accept=".jpg,.jpeg,.png,.webp">
-		<button type="submit" class="tombol">Simpan</button>
-	</form>
-	' . form_pengaturan_email($admin) . '
-	</section>';
+
+	$kartu = fn (string $judul, string $isi, string $catatan = '') => '<div class="kartu-atur"><h3>' . $judul . '</h3>' . $isi . ($catatan !== '' ? '<p class="catatan">' . $catatan . '</p>' : '') . '</div>';
+	$uang_isian = fn (string $id, int $nilai) => '<input id="' . $id . '" name="' . $id . '" inputmode="numeric" data-rupiah value="' . e((string) $nilai) . '">';
+
+	$bagian = match ($tab) {
+		'harga' => '<div class="kisi-atur">'
+			. $kartu('<label for="biaya_awal">Biaya awal pengajuan</label>', $uang_isian('biaya_awal', (int) pengaturan('biaya_awal', '250000')), 'Uang muka, dipotong dari harga paket saat pelunasan.')
+			. implode('', array_map(fn ($pk) => $kartu('<label for="' . $pk[3] . '">' . e($pk[0]) . '</label>', $uang_isian($pk[3], (int) pengaturan($pk[3], (string) $pk[4])), e($pk[5])), PAKET))
+			. '</div><div class="kisi-atur">'
+			. $kartu('<label for="batas_halaman_paket">Batas halaman standar</label>', '<input id="batas_halaman_paket" name="batas_halaman_paket" type="number" min="1" value="' . e((string) batas_halaman_paket()) . '">', 'Buku A5, HVS hitam putih, soft cover. Lebih tebal = ada selisih cetak.')
+			. $kartu('<label for="margin_cetak">Margin harga cetak (%)</label>', '<input id="margin_cetak" name="margin_cetak" type="number" min="0" max="500" value="' . e((string) margin_cetak()) . '">', 'Harga cetak per buku = taksiran <a href="' . e(url('/admin/harga')) . '">Harga Cetak</a> + margin.')
+			. '</div>',
+		'hki' => '<div class="kisi-atur">'
+			. $kartu('<label for="harga_hki">Harga umum</label>', $uang_isian('harga_hki', harga_hki()), 'Untuk pemohon yang belum menerbitkan buku di sini.')
+			. $kartu('<label for="harga_hki_penulis">Harga khusus</label>', $uang_isian('harga_hki_penulis', harga_hki_penulis()), 'Otomatis untuk penulis yang biaya awalnya sudah diterima, dan pemohon dengan <a href="' . e(url('/admin/hki#kode-khusus')) . '">kode harga khusus</a>.')
+			. '</div><p class="catatan">HKI di Paket Pustaka tetap tanpa biaya tambahan. Biaya satu permohonan bisa diubah dari halaman detail HKI sebelum dibayar.</p>',
+		'waktu' => '<p class="catatan">Tampil di bawah tiap tahap progres pengajuan. Kosongkan bila tidak ingin ditampilkan. Contoh: 1 hari kerja, 7–9 hari kerja.</p><div class="kisi-atur kisi-atur--2">'
+			. $kartu('Penerbitan buku', '<div class="daftar-waktu">' . implode('', array_map(fn ($i, $t) => '<label for="waktu_buku_' . $i . '">' . e($t[0]) . '</label><input id="waktu_buku_' . $i . '" name="waktu_buku_' . $i . '" maxlength="40" value="' . e(waktu_tahap('buku', $i, WAKTU_TAHAP_BUKU[$i])) . '">', array_keys(TAHAP_TAMPIL), TAHAP_TAMPIL)) . '</div>')
+			. $kartu('Layanan HKI', '<div class="daftar-waktu">' . implode('', array_map(fn ($i, $t) => '<label for="waktu_hki_' . $i . '">' . e($t[0]) . '</label><input id="waktu_hki_' . $i . '" name="waktu_hki_' . $i . '" maxlength="40" value="' . e(waktu_tahap('hki', $i, $t[2])) . '">', array_keys(TAHAP_HKI), TAHAP_HKI)) . '</div>')
+			. '</div>',
+		'layanan' => '<div class="kisi-atur kisi-atur--2">'
+			. implode('', array_map(fn ($jenis, $d) => '<label class="kartu-atur kartu-saklar"><input type="checkbox" name="tampil_layanan_' . $jenis . '" value="1"' . (layanan_tampil($jenis) ? ' checked' : '') . '><span><strong>Tampilkan</strong><br><span class="catatan">' . e($d[0]) . '</span></span></label>', array_keys(LAYANAN_PUBLIK), LAYANAN_PUBLIK))
+			. '</div><p class="pesan pesan--info">Perpusnas melarang website penerbit mempromosikan jasa pencantuman ISBN, jadi halaman ini sebaiknya tetap disembunyikan. Panel penulis, admin, dan keuangan tetap berjalan. Selama semuanya disembunyikan, pendaftaran akun mandiri ditutup; buat akun penulis di menu <a href="' . e(url('/admin/pengguna')) . '">Pengguna</a>.</p>',
+		'identitas' => '<div class="kisi-atur kisi-atur--2">'
+			. implode('', array_map(fn ($k, $d) => '<div class="isian-atur' . ($d[1] === 'textarea' ? ' isian-atur--lebar' : '') . '"><label for="situs_' . $k . '">' . e($d[0]) . '</label>' . ($d[1] === 'textarea'
+				? '<textarea id="situs_' . $k . '" name="situs_' . $k . '" rows="2">' . e($SITUS[$k]) . '</textarea>'
+				: '<input id="situs_' . $k . '" name="situs_' . $k . '" value="' . e($SITUS[$k]) . '"' . ($k === 'email' ? ' type="email"' : '') . '>') . '</div>', array_keys(IDENTITAS), IDENTITAS))
+			. '</div><p class="catatan">Isi halaman Tentang Kami, Kontak, dan lainnya diubah di menu <a href="' . e(url('/admin/halaman')) . '">Halaman Website</a>.</p>',
+		'qris' => '<div class="kisi-atur kisi-atur--2"><div class="kartu-atur"><h3>QRIS saat ini</h3>' . blok_qris() . '</div>'
+			. $kartu('<label for="qris">Ganti gambar QRIS</label>', '<input type="file" id="qris" name="qris" accept=".jpg,.jpeg,.png,.webp" required>', 'JPG, PNG, atau WebP. Gambar lama langsung diganti setelah disimpan.') . '</div>',
+		default => '',
+	};
+
+	$tabs = '';
+	foreach (TAB_PENGATURAN as $k => [$label, $ik]) {
+		$tabs .= '<a href="' . e(url('/admin/pengaturan?tab=' . $k)) . '"' . ($k === $tab ? ' aria-current="page"' : '') . '>' . ikon($ik) . '<span>' . e($label) . '</span></a>';
+	}
+	$ringkas = '<div class="ringkas-atur">'
+		. '<a href="' . e(url('/admin/pengaturan?tab=harga')) . '"><span>Biaya awal</span><strong>' . rupiah((int) pengaturan('biaya_awal', '250000')) . '</strong></a>'
+		. '<a href="' . e(url('/admin/pengaturan?tab=hki')) . '"><span>HKI umum / khusus</span><strong>' . rupiah(harga_hki()) . ' / ' . rupiah(harga_hki_penulis()) . '</strong></a>'
+		. '<a href="' . e(url('/admin/pengaturan?tab=email')) . '"><span>Email</span><strong class="' . (smtp_siap() ? 'ok' : 'awas') . '">' . (smtp_siap() ? 'Siap terkirim' : 'Belum diatur') . '</strong></a>'
+		. '</div>';
+
+	$isi = '<section class="panel panel-atur"><h1>Pengaturan</h1>' . $ringkas . '
+	<nav class="tab-atur" aria-label="Bagian pengaturan">' . $tabs . '</nav>
+	<div class="isi-atur">'
+		. ($tab === 'email' ? form_pengaturan_email($admin)
+			: '<form method="post" enctype="multipart/form-data" class="formulir formulir-atur" data-ubah>' . csrf_field() . '<input type="hidden" name="tab" value="' . e($tab) . '">' . $bagian
+				. '<div class="bilah-simpan"><span>Ada perubahan yang belum disimpan.</span><button type="submit" class="tombol tombol--kecil">Simpan</button></div></form>')
+	. '</div></section>
+	<script>document.querySelectorAll("form[data-ubah]").forEach(function(f){var t=function(){f.classList.add("berubah")};f.addEventListener("input",t);f.addEventListener("change",t);});</script>';
 	tampil('Pengaturan', $isi, ['panel' => menu_admin('/admin/pengaturan')]);
 }
 
@@ -1090,7 +1114,7 @@ function admin_halaman(bool $post): void
 			. '<td style="text-align:right;white-space:nowrap"><a class="tombol tombol--kecil" href="' . e(url('/admin/halaman/' . $slug)) . '">Ubah</a> <a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/' . $slug . '/')) . '" target="_blank">Lihat</a></td></tr>';
 	}
 	$isi = '<section class="panel"><h1>Halaman Website</h1>
-	<p>Ubah isi halaman yang tampil di menu dan footer website. Tulisan di bawah logo, alamat, dan kontak di footer diubah di <a href="' . e(url('/admin/pengaturan')) . '">Pengaturan</a>.</p>
+	<p>Ubah isi halaman yang tampil di menu dan footer website. Tulisan di bawah logo, alamat, dan kontak di footer diubah di <a href="' . e(url('/admin/pengaturan?tab=identitas')) . '">Pengaturan</a>.</p>
 	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Halaman</th><th>Status</th><th></th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
 	tampil('Halaman Website', $isi, ['panel' => menu_admin('/admin/halaman')]);
 }
@@ -1145,12 +1169,12 @@ function form_pengaturan_email(array $admin): string
 			? '<p class="pesan pesan--info">SMTP belum diatur. Email dikirim dengan fungsi mail() server, yang sering masuk Spam atau tidak sampai. Isi formulir di bawah agar email lupa kata sandi dan pemberitahuan status terkirim dengan andal.</p>'
 			: '<p class="pesan pesan--galat">Website belum bisa mengirim email. Fitur <strong>Lupa kata sandi</strong> dan pemberitahuan status lewat email belum berjalan sampai formulir di bawah diisi.</p>');
 	if ($s['dari_config']) {
-		return '<h2 id="email">Pengiriman email</h2>' . $status . '<p class="catatan">Pengaturan SMTP diambil dari file config.php di folder literaindo-data. Ubah di file itu.</p>
+		return $status . '<p class="catatan">Pengaturan SMTP diambil dari file config.php di folder literaindo-data. Ubah di file itu.</p>
 	<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="email"><input type="hidden" name="hanya_uji" value="1">
 		<button type="submit" class="tombol tombol--kedua">Kirim email uji ke ' . e($admin['email']) . '</button></form>';
 	}
-	return '<h2 id="email">Pengiriman email</h2>' . $status . '
-	<form method="post" class="formulir" autocomplete="off">' . csrf_field() . '<input type="hidden" name="aksi" value="email">
+	return $status . '
+	<form method="post" class="formulir formulir-atur formulir-email" autocomplete="off">' . csrf_field() . '<input type="hidden" name="aksi" value="email">
 		<p class="catatan">Pakai kotak surat dari hPanel → <strong>Email</strong>, misalnya <em>noreply@literaindo.com</em>. Email lupa kata sandi dan pemberitahuan dikirim atas nama alamat ini.</p>
 		<label for="smtp_user">Alamat email pengirim</label>
 		<input type="email" id="smtp_user" name="smtp_user" value="' . e($s['user']) . '" placeholder="noreply@literaindo.com">

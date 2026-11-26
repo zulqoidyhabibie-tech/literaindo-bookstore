@@ -862,7 +862,7 @@ function admin_hki(bool $post): void
 	<div class="kotak-status-grid">' . $kotak . '</div>
 	<form method="get" class="filter filter--admin"><label class="filter__isian"><span class="tersembunyi">Status</span><select name="status">' . $opsi . '</select></label><label class="filter__isian"><span class="tersembunyi">Cari</span><input type="search" name="cari" placeholder="Judul atau nama pemohon" value="' . e($cari) . '"></label><div class="filter__tombol"><button class="tombol" type="submit">Tampilkan</button></div></form>
 	' . ($baris ? '<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Judul</th><th>Pemohon</th><th>Jalur</th><th>Status</th><th>Diperbarui</th></tr></thead><tbody>' . $baris . '</tbody></table></div>' : '<p class="catatan">Tidak ada permohonan HKI.</p>') . '
-	<p class="catatan">Harga layanan HKI: umum ' . rupiah(harga_hki()) . ', khusus ' . rupiah(harga_hki_penulis()) . ' (ubah di <a href="' . e(url('/admin/pengaturan')) . '">Pengaturan</a>).</p></section>
+	<p class="catatan">Harga layanan HKI: umum ' . rupiah(harga_hki()) . ', khusus ' . rupiah(harga_hki_penulis()) . ' (ubah di <a href="' . e(url('/admin/pengaturan?tab=hki')) . '">Pengaturan</a>).</p></section>
 	' . kelola_kode_hki();
 	tampil('Pengajuan HKI', $isi, ['panel' => menu_admin('/admin/hki')]);
 }
