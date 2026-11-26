@@ -623,10 +623,14 @@ function admin_pengguna(bool $post): void
 	$baris = '';
 	foreach (semua('SELECT u.*, (SELECT COUNT(*) FROM pengajuan p WHERE p.pengguna_id = u.id) AS jml FROM pengguna u ORDER BY u.dibuat DESC') as $r) {
 		$diri = (int) $r['id'] === (int) $admin['id'];
-		$baris .= '<tr><td><a href="' . e(url('/admin/pengguna/' . $r['id'])) . '"><strong>' . e($r['nama']) . '</strong></a><br><span class="catatan">' . e($r['email']) . ($r['whatsapp'] !== '' ? ' · ' . e($r['whatsapp']) : '') . '</span>'
-			. '<div class="aksi-pengguna"><a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/admin/pengguna/' . $r['id'])) . '">Lihat akun</a>' . ($r['peran'] !== 'admin' ? form_masuk_sebagai($r) : '') . '</div></td><td class="angka">' . (int) $r['jml'] . '</td><td>'
-			. ($diri ? 'Admin (Anda)' : '<form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="peran"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="peran-' . $r['id'] . '">Peran</label><select id="peran-' . $r['id'] . '" name="peran">' . implode('', array_map(fn ($k, $l) => '<option value="' . $k . '"' . ($r['peran'] === $k ? ' selected' : '') . '>' . e($l) . '</option>', array_keys(PERAN), PERAN)) . '</select><button class="tombol tombol--kecil" type="submit">Simpan</button></form>')
-			. '</td><td><details><summary>Atur ulang sandi</summary><form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="sandi"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="sandi-' . $r['id'] . '">Sandi baru</label><input type="text" id="sandi-' . $r['id'] . '" name="sandi" minlength="8" placeholder="Sandi baru"><button class="tombol tombol--kecil" type="submit">Ganti</button></form></details></td></tr>';
+		$rid = (int) $r['id'];
+		$peran = $diri ? '<span class="catatan">Admin (Anda)</span>'
+			: '<form method="post" class="peran-form">' . csrf_field() . '<input type="hidden" name="aksi" value="peran"><input type="hidden" name="uid" value="' . $rid . '"><label class="tersembunyi" for="peran-' . $rid . '">Peran</label><select id="peran-' . $rid . '" name="peran" onchange="this.form.querySelector(\'button\').hidden=false">' . implode('', array_map(fn ($k, $l) => '<option value="' . $k . '"' . ($r['peran'] === $k ? ' selected' : '') . '>' . e($k === 'pengaju' ? 'Penulis' : $l) . '</option>', array_keys(PERAN), PERAN)) . '</select><button class="ikon-tombol ikon-tombol--utama" type="submit" title="Simpan peran" aria-label="Simpan peran" hidden>' . ikon('centang') . '</button></form>';
+		$aksi = '<a class="ikon-tombol" href="' . e(url('/admin/pengguna/' . $rid)) . '" title="Lihat akun" aria-label="Lihat akun ' . e($r['nama']) . '">' . ikon('lihat') . '</a>'
+			. ($r['peran'] !== 'admin' ? form_masuk_sebagai($r, 'Masuk sebagai ' . $r['nama'], 'ikon-tombol', ikon('masuk')) : '')
+			. '<details class="ikon-lipat"><summary class="ikon-tombol" title="Atur ulang sandi" aria-label="Atur ulang sandi ' . e($r['nama']) . '">' . ikon('kunci') . '</summary><form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="sandi"><input type="hidden" name="uid" value="' . $rid . '"><label class="tersembunyi" for="sandi-' . $rid . '">Sandi baru</label><input type="text" id="sandi-' . $rid . '" name="sandi" minlength="8" placeholder="Sandi baru (min. 8)" required><button class="tombol tombol--kecil" type="submit">Ganti</button></form></details>';
+		$baris .= '<tr><td><a href="' . e(url('/admin/pengguna/' . $rid)) . '"><strong>' . e($r['nama']) . '</strong></a><br><span class="catatan">' . e($r['email']) . ($r['whatsapp'] !== '' ? ' · ' . e($r['whatsapp']) : '') . '</span></td>'
+			. '<td class="angka">' . (int) $r['jml'] . '</td><td>' . $peran . '</td><td><div class="aksi-ikon">' . $aksi . '</div></td></tr>';
 	}
 	$isi = '<section class="panel"><h1>Pengguna</h1>
 	<details class="kotak-langkah"><summary>Tambah akun (penulis / keuangan / admin)</summary>
@@ -641,15 +645,16 @@ function admin_pengguna(bool $post): void
 			<button type="submit" class="tombol">Buat Akun</button>
 		</form>
 	</details>
-	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Nama</th><th>Pengajuan</th><th>Peran</th><th>Kata sandi</th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
+	<div class="tabel-wadah"><table class="tabel tabel-pengguna"><thead><tr><th>Nama</th><th>Pengajuan</th><th>Peran</th><th>Aksi</th></tr></thead><tbody>' . $baris . '</tbody></table></div>
+	<p class="catatan keterangan-ikon">' . ikon('lihat') . ' Lihat akun &nbsp; ' . ikon('masuk') . ' Masuk sebagai pengguna &nbsp; ' . ikon('kunci') . ' Atur ulang sandi</p></section>';
 	tampil('Pengguna', $isi, ['panel' => menu_admin('/admin/pengguna')]);
 }
 
 /** Tombol "Masuk sebagai" (hanya untuk akun penulis dan keuangan). */
-function form_masuk_sebagai(array $r, string $label = 'Masuk sebagai'): string
+function form_masuk_sebagai(array $r, string $label = 'Masuk sebagai', string $kelas = 'tombol tombol--kecil', string $ikon = ''): string
 {
 	return '<form method="post" action="' . e(url('/admin/pengguna/' . $r['id'] . '/masuk')) . '">' . csrf_field()
-		. '<button type="submit" class="tombol tombol--kecil" title="Buka panel ' . e($r['nama']) . ' seperti yang ia lihat">' . e($label) . '</button></form>';
+		. '<button type="submit" class="' . $kelas . '" title="' . ($ikon !== '' ? 'Masuk sebagai pengguna ini' : 'Buka panel ' . e($r['nama']) . ' seperti yang ia lihat') . '"' . ($ikon !== '' ? ' aria-label="' . e($label) . '">' . $ikon : '>' . e($label)) . '</button></form>';
 }
 
 /** Detail satu akun: profil, pengajuan buku, HKI, pesanan, dan catatan "masuk sebagai". */

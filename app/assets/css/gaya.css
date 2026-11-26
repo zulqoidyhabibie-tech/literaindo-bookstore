@@ -3736,15 +3736,157 @@ fieldset.serah legend {
 	color: #fff;
 }
 
-.aksi-pengguna {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.4rem;
-	margin-top: 0.45rem;
+.tabel-pengguna td {
+	vertical-align: middle;
+	font-size: 0.92rem;
 }
 
-.aksi-pengguna form {
+.peran-form {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
 	margin: 0;
+}
+
+.peran-form select {
+	min-height: 32px;
+	padding: 0.2rem 0.4rem;
+	font-size: 0.88rem;
+	border: 1px solid var(--garis);
+	border-radius: 8px;
+	background: #fff;
+}
+
+.aksi-ikon {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.25rem;
+	flex-wrap: wrap;
+}
+
+.aksi-ikon form {
+	margin: 0;
+}
+
+.ikon-tombol {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid var(--garis);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--warna-utama);
+	cursor: pointer;
+	list-style: none;
+}
+
+.ikon-tombol::-webkit-details-marker {
+	display: none;
+}
+
+.ikon-tombol:hover,
+.ikon-tombol:focus-visible,
+.ikon-lipat[open] > .ikon-tombol {
+	background: var(--hijau-muda, #eef5f1);
+	border-color: var(--warna-utama);
+}
+
+.ikon-tombol .ikon {
+	width: 17px;
+	height: 17px;
+}
+
+.ikon-tombol--utama {
+	background: var(--warna-utama);
+	border-color: var(--warna-utama);
+	color: #fff;
+}
+
+.ikon-lipat {
+	position: relative;
+}
+
+.ikon-lipat > form {
+	position: absolute;
+	right: 0;
+	top: 38px;
+	z-index: 20;
+	width: 250px;
+	padding: 0.5rem;
+	background: #fff;
+	border: 1px solid var(--garis);
+	border-radius: 10px;
+	box-shadow: var(--bayang, 0 8px 24px rgba(0, 0, 0, 0.12));
+	flex-wrap: nowrap;
+}
+
+.ikon-lipat > form input {
+	min-height: 32px;
+	font-size: 0.88rem;
+	min-width: 0;
+}
+
+.ikon-tombol[hidden] {
+	display: none;
+}
+
+.ikon-lipat,
+.ikon-lipat > summary.ikon-tombol {
+	margin: 0;
+	padding: 0;
+	border-width: 1px;
+}
+
+.ikon-lipat {
+	border: 0;
+	background: none;
+}
+
+@media (max-width: 760px) {
+	.tabel-pengguna thead {
+		display: none;
+	}
+
+	.tabel-pengguna,
+	.tabel-pengguna tbody {
+		display: block;
+	}
+
+	.tabel-pengguna tr {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 0.5rem 0.75rem;
+		padding: 0.8rem 0;
+		border-bottom: 1px solid var(--garis);
+	}
+
+	.tabel-pengguna td {
+		display: block;
+		padding: 0;
+		border: 0;
+	}
+
+	.tabel-pengguna td:nth-child(1) {
+		grid-column: 1 / -1;
+	}
+
+	.tabel-pengguna td:nth-child(2) {
+		display: none;
+	}
+
+	.tabel-pengguna .aksi-ikon {
+		justify-content: flex-end;
+	}
+}
+
+.keterangan-ikon .ikon {
+	width: 15px;
+	height: 15px;
+	vertical-align: -2px;
+	color: var(--warna-utama);
 }
 
 .judul-aksi {
