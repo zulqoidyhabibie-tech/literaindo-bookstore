@@ -623,7 +623,8 @@ function admin_pengguna(bool $post): void
 	$baris = '';
 	foreach (semua('SELECT u.*, (SELECT COUNT(*) FROM pengajuan p WHERE p.pengguna_id = u.id) AS jml FROM pengguna u ORDER BY u.dibuat DESC') as $r) {
 		$diri = (int) $r['id'] === (int) $admin['id'];
-		$baris .= '<tr><td><strong>' . e($r['nama']) . '</strong><br><span class="catatan">' . e($r['email']) . ' · ' . e($r['whatsapp']) . '</span></td><td class="angka">' . (int) $r['jml'] . '</td><td>'
+		$baris .= '<tr><td><a href="' . e(url('/admin/pengguna/' . $r['id'])) . '"><strong>' . e($r['nama']) . '</strong></a><br><span class="catatan">' . e($r['email']) . ($r['whatsapp'] !== '' ? ' · ' . e($r['whatsapp']) : '') . '</span>'
+			. '<div class="aksi-pengguna"><a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/admin/pengguna/' . $r['id'])) . '">Lihat akun</a>' . ($r['peran'] !== 'admin' ? form_masuk_sebagai($r) : '') . '</div></td><td class="angka">' . (int) $r['jml'] . '</td><td>'
 			. ($diri ? 'Admin (Anda)' : '<form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="peran"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="peran-' . $r['id'] . '">Peran</label><select id="peran-' . $r['id'] . '" name="peran">' . implode('', array_map(fn ($k, $l) => '<option value="' . $k . '"' . ($r['peran'] === $k ? ' selected' : '') . '>' . e($l) . '</option>', array_keys(PERAN), PERAN)) . '</select><button class="tombol tombol--kecil" type="submit">Simpan</button></form>')
 			. '</td><td><details><summary>Atur ulang sandi</summary><form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="sandi"><input type="hidden" name="uid" value="' . $r['id'] . '"><label class="tersembunyi" for="sandi-' . $r['id'] . '">Sandi baru</label><input type="text" id="sandi-' . $r['id'] . '" name="sandi" minlength="8" placeholder="Sandi baru"><button class="tombol tombol--kecil" type="submit">Ganti</button></form></details></td></tr>';
 	}
@@ -642,6 +643,111 @@ function admin_pengguna(bool $post): void
 	</details>
 	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Nama</th><th>Pengajuan</th><th>Peran</th><th>Kata sandi</th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
 	tampil('Pengguna', $isi, ['panel' => menu_admin('/admin/pengguna')]);
+}
+
+/** Tombol "Masuk sebagai" (hanya untuk akun penulis dan keuangan). */
+function form_masuk_sebagai(array $r, string $label = 'Masuk sebagai'): string
+{
+	return '<form method="post" action="' . e(url('/admin/pengguna/' . $r['id'] . '/masuk')) . '">' . csrf_field()
+		. '<button type="submit" class="tombol tombol--kecil" title="Buka panel ' . e($r['nama']) . ' seperti yang ia lihat">' . e($label) . '</button></form>';
+}
+
+/** Detail satu akun: profil, pengajuan buku, HKI, pesanan, dan catatan "masuk sebagai". */
+function admin_pengguna_detail(bool $post, string $id): void
+{
+	$admin = wajib_masuk('admin');
+	$u = satu('SELECT * FROM pengguna WHERE id = ?', [(int) $id]);
+	if (!$u) {
+		tidak_ditemukan();
+	}
+	$uid = (int) $u['id'];
+
+	$buku = semua('SELECT p.*, u.nama FROM pengajuan p JOIN pengguna u ON u.id = p.pengguna_id WHERE p.pengguna_id = ? ORDER BY p.diubah DESC', [$uid]);
+
+	$hki = '';
+	foreach (semua('SELECT * FROM hki WHERE pengguna_id = ? ORDER BY diubah DESC', [$uid]) as $h) {
+		$hki .= '<tr><td><a href="' . e(url('/admin/hki/' . $h['id'])) . '"><strong>' . e($h['judul']) . '</strong></a><br><span class="catatan">' . e(no_hki($h)) . '</span></td><td>' . label_hki($h['status']) . '</td><td class="angka">' . e(tanggal($h['diubah'])) . '</td></tr>';
+	}
+
+	$pesanan = '';
+	foreach (semua('SELECT o.*, b.judul FROM pesanan o JOIN buku b ON b.id = o.buku_id WHERE o.pengguna_id = ? OR o.email = ? ORDER BY o.dibuat DESC', [$uid, $u['email']]) as $o) {
+		$pesanan .= '<tr><td><a href="' . e(url('/admin/pesanan/' . $o['id'])) . '"><strong>' . e($o['kode']) . '</strong></a><br><span class="catatan">' . e($o['judul']) . ' · ' . (int) $o['jumlah'] . ' ' . ($o['format'] === 'ebook' ? 'e-book' : 'eks') . '</span></td><td>' . label_pesanan($o['status']) . '</td><td class="angka">' . rupiah((int) $o['total']) . '</td></tr>';
+	}
+
+	$jejak = '';
+	try {
+		foreach (semua('SELECT j.*, a.nama AS admin FROM jejak_admin j LEFT JOIN pengguna a ON a.id = j.admin_id WHERE j.pengguna_id = ? ORDER BY j.id DESC LIMIT 10', [$uid]) as $j) {
+			$jejak .= '<li>' . e(tanggal($j['dibuat'])) . ' · ' . e($j['admin'] ?? 'Admin') . ' ' . ($j['aksi'] === 'masuk' ? 'masuk sebagai akun ini' : 'kembali ke akun admin') . '</li>';
+		}
+	} catch (Throwable) {
+	}
+
+	$tabel = fn (string $baris, string $kepala, string $kosong) => $baris !== ''
+		? '<div class="tabel-wadah"><table class="tabel"><thead><tr>' . $kepala . '</tr></thead><tbody>' . $baris . '</tbody></table></div>'
+		: '<p class="catatan">' . $kosong . '</p>';
+
+	$diri = $uid === (int) $admin['id'];
+	$isi = '<section class="panel">
+	<p class="catatan"><a href="' . e(url('/admin/pengguna')) . '">← Semua pengguna</a></p>
+	<div class="judul-aksi"><h1>' . e($u['nama']) . '</h1>'
+		. ($u['peran'] !== 'admin' ? form_masuk_sebagai($u, 'Masuk sebagai ' . (PERAN[$u['peran']] === 'Keuangan' ? 'keuangan' : 'penulis') . ' ini') : '') . '</div>
+	<dl class="data-ringkas">
+		<div><dt>Peran</dt><dd>' . e(PERAN[$u['peran']] ?? $u['peran']) . ($diri ? ' (Anda)' : '') . '</dd></div>
+		<div><dt>Email</dt><dd><a href="mailto:' . e($u['email']) . '">' . e($u['email']) . '</a></dd></div>
+		<div><dt>WhatsApp</dt><dd>' . ($u['whatsapp'] !== '' ? '<a href="https://wa.me/' . e(preg_replace('/^0/', '62', ltrim($u['whatsapp'], '+'))) . '">' . e($u['whatsapp']) . '</a>' : '-') . '</dd></div>
+		<div><dt>Terdaftar</dt><dd>' . e(tanggal($u['dibuat'])) . '</dd></div>
+	</dl>
+	' . ($u['peran'] !== 'admin' ? '<p class="catatan">"Masuk sebagai" membuka panel akun ini persis seperti yang dilihat pemiliknya, tanpa perlu kata sandinya. Tekan <strong>Kembali ke admin</strong> di pita atas untuk kembali. Setiap kali masuk dicatat di bawah.</p>' : '') . '
+	<h2>Pengajuan buku (' . count($buku) . ')</h2>
+	' . ($buku ? tabel_pengajuan($buku) : '<p class="catatan">Belum ada pengajuan buku.</p>') . '
+	<h2>Pengajuan HKI</h2>
+	' . $tabel($hki, '<th>Judul</th><th>Status</th><th>Diperbarui</th>', 'Belum ada pengajuan HKI.') . '
+	<h2>Pesanan buku</h2>
+	' . $tabel($pesanan, '<th>Pesanan</th><th>Status</th><th>Total</th>', 'Belum ada pesanan buku.') . '
+	' . ($jejak !== '' ? '<h2>Catatan masuk sebagai</h2><ul class="daftar-jejak">' . $jejak . '</ul>' : '') . '
+</section>';
+	tampil($u['nama'], $isi, ['panel' => menu_admin('/admin/pengguna')]);
+}
+
+/** Admin membuka sesi sebagai penulis/keuangan. Akun admin lain tidak bisa dimasuki. */
+function admin_masuk_sebagai(bool $post, string $id): void
+{
+	$admin = wajib_masuk('admin');
+	$u = satu('SELECT * FROM pengguna WHERE id = ?', [(int) $id]);
+	if (!$post || !$u) {
+		arahkan('/admin/pengguna' . ($u ? '/' . $u['id'] : ''));
+	}
+	if ($u['peran'] === 'admin') {
+		pesan('Akun admin tidak bisa dimasuki dengan "Masuk sebagai".', 'galat');
+		arahkan('/admin/pengguna/' . $u['id']);
+	}
+	catat_jejak_admin((int) $admin['id'], (int) $u['id'], 'masuk');
+	session_regenerate_id(true);
+	$_SESSION['admin_asal'] = (int) $admin['id'];
+	$_SESSION['uid'] = (int) $u['id'];
+	pesan('Anda sekarang melihat panel sebagai ' . $u['nama'] . '.', 'info');
+	arahkan(beranda_peran($u['peran']));
+}
+
+/** Akhiri "masuk sebagai" dan kembali ke akun admin asal. */
+function kembali_ke_admin(bool $post): void
+{
+	if (!$post || empty($_SESSION['admin_asal'])) {
+		arahkan(pengguna() ? beranda_peran(pengguna()['peran']) : '/');
+	}
+	$admin = admin_asal();
+	$uid = (int) ($_SESSION['uid'] ?? 0);
+	unset($_SESSION['admin_asal']);
+	session_regenerate_id(true);
+	if (!$admin) {
+		$_SESSION = [];
+		session_destroy();
+		arahkan('/masuk');
+	}
+	catat_jejak_admin((int) $admin['id'], $uid, 'kembali');
+	$_SESSION['uid'] = (int) $admin['id'];
+	pesan('Anda kembali ke akun admin.');
+	arahkan('/admin/pengguna/' . $uid);
 }
 
 function admin_pengaturan(bool $post): void

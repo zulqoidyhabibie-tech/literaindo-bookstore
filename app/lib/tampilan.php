@@ -102,7 +102,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=25';
+	$css = url('/assets/css/gaya.css') . '?v=26';
 
 	echo '<!doctype html>
 <html lang="id">
@@ -142,6 +142,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 		</div>
 	</div>
 </header>
+' . (($asal = $u ? admin_asal() : null) ? '<div class="pita-admin" role="status"><div class="wadah pita-admin__baris"><span>Anda (' . e($asal['nama']) . ') sedang masuk sebagai <strong>' . e($u['nama']) . '</strong> · ' . e(PERAN[$u['peran']] ?? $u['peran']) . '</span><form method="post" action="' . e(url('/kembali-admin')) . '">' . csrf_field() . '<button type="submit" class="tombol tombol--kecil">Kembali ke admin</button></form></div></div>' : '') . '
 <main id="isi" class="wadah">
 ' . ($panel !== '' ? '<div class="tata-panel">' . $panel . '<div class="tata-panel__isi">' . $pesan . $isi . '</div></div>' : $pesan . $isi) . '
 </main>

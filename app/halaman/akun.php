@@ -240,6 +240,9 @@ function halaman_atur_sandi(bool $post, string $token): void
 
 function halaman_keluar(bool $post): void
 {
+	if ($post && !empty($_SESSION['admin_asal'])) {
+		kembali_ke_admin(true);
+	}
 	if ($post) {
 		$_SESSION = [];
 		session_destroy();
