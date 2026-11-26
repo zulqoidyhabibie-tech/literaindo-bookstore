@@ -1,0 +1,462 @@
+<?php
+// Struktur database. Ditulis agar jalan di MySQL (Hostinger) dan SQLite (uji lokal).
+
+declare(strict_types=1);
+
+function skema_notifikasi(string $driver): string
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	return "CREATE TABLE IF NOT EXISTS notifikasi (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			pesan VARCHAR(500) NOT NULL,
+			tautan VARCHAR(255) NOT NULL DEFAULT '',
+			dibaca TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL
+		)$akhir";
+}
+
+function skema_pesanan(string $driver): string
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$teks = $driver === 'sqlite' ? 'TEXT' : 'TEXT';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	return "CREATE TABLE IF NOT EXISTS pesanan (
+			id $id,
+			kode VARCHAR(20) NOT NULL UNIQUE,
+			token VARCHAR(64) NOT NULL,
+			pengguna_id $fk NULL,
+			buku_id $fk NOT NULL,
+			format VARCHAR(10) NOT NULL,
+			jumlah INT NOT NULL DEFAULT 1,
+			harga_satuan INT NOT NULL DEFAULT 0,
+			subtotal INT NOT NULL DEFAULT 0,
+			ongkir INT NOT NULL DEFAULT 0,
+			total INT NOT NULL DEFAULT 0,
+			nama VARCHAR(150) NOT NULL,
+			email VARCHAR(190) NOT NULL,
+			whatsapp VARCHAR(30) NOT NULL DEFAULT '',
+			alamat $teks,
+			kode_pos VARCHAR(10) NOT NULL DEFAULT '',
+			catatan $teks,
+			status VARCHAR(30) NOT NULL,
+			kurir VARCHAR(60) NOT NULL DEFAULT '',
+			resi VARCHAR(120) NOT NULL DEFAULT '',
+			bayar_status VARCHAR(10) NOT NULL DEFAULT '',
+			bukti_path VARCHAR(255) NOT NULL DEFAULT '',
+			bukti_dibuat DATETIME NULL,
+			diverifikasi DATETIME NULL,
+			pemeriksa_id $fk NULL,
+			catatan_bayar VARCHAR(500) NOT NULL DEFAULT '',
+			ebook_sampai DATETIME NULL,
+			ebook_unduh INT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL,
+			diubah DATETIME NOT NULL
+		)$akhir";
+}
+
+/** Pengajuan HKI (pencatatan hak cipta di DJKI), berkasnya, dan riwayatnya. */
+function skema_hki(string $driver): array
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$teks = $driver === 'sqlite' ? 'TEXT' : 'MEDIUMTEXT';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	return [
+		"CREATE TABLE IF NOT EXISTS hki (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			pengajuan_id $fk NULL,
+			jenis_ciptaan VARCHAR(30) NOT NULL DEFAULT 'buku',
+			judul VARCHAR(255) NOT NULL,
+			uraian $teks,
+			tanggal_umum VARCHAR(10) NOT NULL DEFAULT '',
+			tempat_umum VARCHAR(150) NOT NULL DEFAULT '',
+			pencipta $teks,
+			pemegang $teks,
+			tautan_contoh VARCHAR(255) NOT NULL DEFAULT '',
+			biaya INT NOT NULL DEFAULT 0,
+			jenis_biaya VARCHAR(10) NOT NULL DEFAULT '',
+			kode_khusus VARCHAR(30) NOT NULL DEFAULT '',
+			status VARCHAR(30) NOT NULL DEFAULT 'DRAF',
+			bayar_status VARCHAR(10) NOT NULL DEFAULT '',
+			bukti_berkas_id $fk NULL,
+			bukti_dibuat DATETIME NULL,
+			diverifikasi DATETIME NULL,
+			pemeriksa_id $fk NULL,
+			catatan_bayar VARCHAR(500) NOT NULL DEFAULT '',
+			nomor_permohonan VARCHAR(60) NOT NULL DEFAULT '',
+			tanggal_permohonan VARCHAR(10) NOT NULL DEFAULT '',
+			nomor_pencatatan VARCHAR(60) NOT NULL DEFAULT '',
+			dibuat DATETIME NOT NULL,
+			diubah DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE IF NOT EXISTS hki_berkas (
+			id $id,
+			hki_id $fk NOT NULL,
+			jenis VARCHAR(20) NOT NULL,
+			path VARCHAR(255) NOT NULL,
+			nama_asli VARCHAR(255) NOT NULL,
+			ukuran INT NOT NULL DEFAULT 0,
+			pengunggah_id $fk NULL,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE IF NOT EXISTS hki_kode (
+			id $id,
+			kode VARCHAR(30) NOT NULL UNIQUE,
+			keterangan VARCHAR(150) NOT NULL DEFAULT '',
+			aktif TINYINT NOT NULL DEFAULT 1,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE IF NOT EXISTS hki_catatan (
+			id $id,
+			hki_id $fk NOT NULL,
+			pengguna_id $fk NULL,
+			isi $teks NOT NULL,
+			sistem TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+	];
+}
+
+/** Tambahkan tabel baru pada database yang dipasang dengan versi lama. */
+function pastikan_skema(): void
+{
+	$versi = (int) pengaturan('versi_skema', '1');
+	if ($versi < 11) {
+		pastikan_skema_lama($versi);
+	}
+	if ($versi < 12) {
+		migrasi_ebook();
+	}
+	if ($versi < 13) {
+		migrasi_reset_sandi();
+	}
+	if ($versi < 14) {
+		migrasi_harga_hki();
+	}
+	if ($versi < 15) {
+		migrasi_jejak_admin();
+	}
+}
+
+/** v15 (26 Nov 2026): catatan saat admin "masuk sebagai" pengguna lain. */
+function migrasi_jejak_admin(): void
+{
+	$driver = config()['db']['driver'] ?? 'mysql';
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	db()->exec("CREATE TABLE IF NOT EXISTS jejak_admin (
+			id $id,
+			admin_id $fk NOT NULL,
+			pengguna_id $fk NOT NULL,
+			aksi VARCHAR(20) NOT NULL,
+			ip VARCHAR(45) NOT NULL DEFAULT '',
+			dibuat DATETIME NOT NULL
+		)$akhir");
+	simpan_pengaturan('versi_skema', '15');
+}
+
+/** v14 (19 Nov 2026): harga khusus HKI (jenis biaya, kode harga khusus). */
+function migrasi_harga_hki(): void
+{
+	foreach (['jenis_biaya' => 'VARCHAR(10)', 'kode_khusus' => 'VARCHAR(30)'] as $kolom => $tipe) {
+		try {
+			db()->query("SELECT $kolom FROM hki LIMIT 1");
+		} catch (PDOException) {
+			db()->exec("ALTER TABLE hki ADD COLUMN $kolom $tipe NOT NULL DEFAULT ''");
+		}
+	}
+	foreach (skema_hki(config()['db']['driver'] ?? 'mysql') as $sql) {
+		db()->exec($sql); // membuat tabel hki_kode (tabel lain sudah ada)
+	}
+	q("UPDATE hki SET jenis_biaya = CASE WHEN biaya = 0 THEN 'pustaka' ELSE 'umum' END WHERE jenis_biaya = ''");
+	simpan_pengaturan('versi_skema', '14');
+}
+
+/** v13 (19 Nov 2026): tautan atur ulang kata sandi lewat email (sekali pakai, 60 menit). */
+function migrasi_reset_sandi(): void
+{
+	$driver = config()['db']['driver'] ?? 'mysql';
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	db()->exec("CREATE TABLE IF NOT EXISTS reset_sandi (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			token_hash CHAR(64) NOT NULL,
+			kedaluwarsa DATETIME NOT NULL,
+			dipakai TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL
+		)$akhir");
+	simpan_pengaturan('versi_skema', '13');
+}
+
+/** Migrasi v1 sampai v11. */
+function pastikan_skema_lama(int $versi): void
+{
+	if ($versi >= 9) {
+		if ($versi < 10) {
+			pastikan_skema_hki();
+		}
+		migrasi_nama_penerbit();
+		return;
+	}
+	if ($versi < 2) {
+		db()->exec(skema_notifikasi(config()['db']['driver'] ?? 'mysql'));
+	}
+	// v3: kolom jenis karya (asli/terjemahan/dialihkan/milik umum)
+	try {
+		db()->query('SELECT jenis_karya FROM pengajuan LIMIT 1');
+	} catch (PDOException) {
+		db()->exec("ALTER TABLE pengajuan ADD COLUMN jenis_karya VARCHAR(20) NOT NULL DEFAULT 'asli'");
+	}
+	// v4: siapa yang memverifikasi pembayaran
+	try {
+		db()->query('SELECT pemeriksa_id FROM pembayaran LIMIT 1');
+	} catch (PDOException) {
+		db()->exec('ALTER TABLE pembayaran ADD COLUMN pemeriksa_id ' . ((config()['db']['driver'] ?? 'mysql') === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED') . ' NULL');
+	}
+	// v5/v6: spesifikasi cetak, taksiran harga, dan daftar harga
+	$kolom_baru = [
+		'sisi_cetak' => "VARCHAR(20) NOT NULL DEFAULT ''", 'warna_isi' => "VARCHAR(20) NOT NULL DEFAULT ''",
+		'jenis_kertas' => "VARCHAR(20) NOT NULL DEFAULT ''", 'jenis_sampul' => "VARCHAR(20) NOT NULL DEFAULT ''",
+		'jilid' => "VARCHAR(20) NOT NULL DEFAULT ''", 'laminasi' => "VARCHAR(20) NOT NULL DEFAULT ''",
+		'paket' => "VARCHAR(20) NOT NULL DEFAULT ''", 'gramasi' => 'INT NOT NULL DEFAULT 0', 'halaman_cetak' => 'INT NOT NULL DEFAULT 0', 'harga_per_buku' => 'INT NOT NULL DEFAULT 0',
+	];
+	foreach ($kolom_baru as $kolom => $tipe) {
+		try {
+			db()->query("SELECT $kolom FROM pengajuan LIMIT 1");
+		} catch (PDOException) {
+			db()->exec("ALTER TABLE pengajuan ADD COLUMN $kolom $tipe");
+		}
+	}
+	foreach (skema_harga(config()['db']['driver'] ?? 'mysql') as $sql) {
+		db()->exec($sql);
+	}
+	isi_harga_awal();
+	// v8: pemesanan buku lewat website
+	db()->exec(skema_pesanan(config()['db']['driver'] ?? 'mysql'));
+	try {
+		db()->query('SELECT ebook_path FROM buku LIMIT 1');
+	} catch (PDOException) {
+		db()->exec("ALTER TABLE buku ADD COLUMN ebook_path VARCHAR(255) NOT NULL DEFAULT ''");
+	}
+	// v9: jenis ISBN yang diajukan (cetak / e-book / keduanya)
+	try {
+		db()->query('SELECT format_terbit FROM pengajuan LIMIT 1');
+	} catch (PDOException) {
+		db()->exec("ALTER TABLE pengajuan ADD COLUMN format_terbit VARCHAR(10) NOT NULL DEFAULT 'cetak'");
+	}
+	simpan_pengaturan('versi_skema', '9');
+	pastikan_skema_hki();
+	migrasi_nama_penerbit();
+}
+
+/**
+ * v11 (17 Nov 2026): nama penerbit menjadi "CV. Master Literasi Indonesia" dan
+ * halaman layanan ISBN/penerbitan disembunyikan (syarat Perpusnas).
+ * - Teks "Literaindo Press" yang tersimpan di Pengaturan/Halaman Website diganti.
+ * - Halaman publik yang sudah diubah admin dan masih mempromosikan layanan
+ *   dikembalikan ke teks bawaan; versi lamanya disimpan di kunci konten_<slug>_lama.
+ */
+function migrasi_nama_penerbit(): void
+{
+	foreach (semua('SELECT k, v FROM pengaturan') as $r) {
+		$v = (string) $r['v'];
+		if (str_contains($v, 'Literaindo Press')) {
+			simpan_pengaturan($r['k'], str_replace('Literaindo Press', 'CV. Master Literasi Indonesia', $v));
+		}
+	}
+	// Nama situs lama yang mungkin disimpan admin sebagai tulisan bawah logo.
+	if (preg_match('/ber-ISBN/i', pengaturan('situs_tagline'))) {
+		simpan_pengaturan('situs_tagline', '');
+	}
+	if (preg_match('/ber-ISBN/i', pengaturan('situs_deskripsi'))) {
+		simpan_pengaturan('situs_deskripsi', '');
+	}
+	foreach (['cara-pemesanan', 'kontak', 'tentang-kami', 'syarat-ketentuan', 'kebijakan-privasi'] as $slug) {
+		$isi = pengaturan('konten_' . $slug);
+		if ($isi !== '' && preg_match('/ISBN|layanan-penerbitan|layanan-hki|url_daftar|ajukan naskah|pengajuan naskah|paket/i', $isi)) {
+			simpan_pengaturan('konten_' . $slug . '_lama', $isi);
+			simpan_pengaturan('konten_' . $slug, '');
+		}
+	}
+	simpan_pengaturan('versi_skema', '11');
+}
+
+/**
+ * v12 (19 Nov 2026): kesiapan penerbit e-book.
+ * - buku.format: cetak / ebook / keduanya (format terbit yang tampil di katalog).
+ * - buku.cuplikan_path: PDF cuplikan yang boleh dibaca publik.
+ * - buku.serah_cetak, buku.serah_digital: tanggal wajib serah simpan (catatan admin).
+ * - Buku khusus e-book yang nomornya tersimpan sebagai ISBN cetak dipindah ke e-ISBN.
+ */
+function migrasi_ebook(): void
+{
+	$kolom_baru = [
+		'format' => "VARCHAR(10) NOT NULL DEFAULT 'cetak'",
+		'cuplikan_path' => "VARCHAR(255) NOT NULL DEFAULT ''",
+		'serah_cetak' => "VARCHAR(10) NOT NULL DEFAULT ''",
+		'serah_digital' => "VARCHAR(10) NOT NULL DEFAULT ''",
+	];
+	foreach ($kolom_baru as $kolom => $tipe) {
+		try {
+			db()->query("SELECT $kolom FROM buku LIMIT 1");
+		} catch (PDOException) {
+			db()->exec("ALTER TABLE buku ADD COLUMN $kolom $tipe");
+		}
+	}
+	foreach (semua('SELECT b.id, b.isbn, b.eisbn, b.harga_cetak, b.harga_ebook, b.ebook_path, p.format_terbit FROM buku b LEFT JOIN pengajuan p ON p.id = b.pengajuan_id') as $b) {
+		$isbn = (string) $b['isbn'];
+		$eisbn = (string) $b['eisbn'];
+		$ft = (string) ($b['format_terbit'] ?? '');
+		$ada_ebook = in_array($ft, ['ebook', 'keduanya'], true) || $eisbn !== '' || (int) $b['harga_ebook'] > 0 || $b['ebook_path'] !== '';
+		$ada_cetak = in_array($ft, ['cetak', 'keduanya'], true) || ($isbn !== '' && $isbn !== $eisbn) || (int) $b['harga_cetak'] > 0;
+		if ($ft === 'ebook' && (int) $b['harga_cetak'] <= 0) {
+			$ada_cetak = false; // pengajuan e-book saja: ISBN-nya adalah e-ISBN
+		}
+		$format = $ada_ebook ? ($ada_cetak ? 'keduanya' : 'ebook') : 'cetak';
+		if ($format === 'ebook' && $isbn !== '') {
+			$eisbn = $eisbn !== '' ? $eisbn : $isbn;
+			$isbn = '';
+		}
+		q('UPDATE buku SET format = ?, isbn = ?, eisbn = ? WHERE id = ?', [$format, $isbn, $eisbn, $b['id']]);
+	}
+	simpan_pengaturan('versi_skema', '12');
+}
+
+/** v10: pengajuan HKI. */
+function pastikan_skema_hki(): void
+{
+	foreach (skema_hki(config()['db']['driver'] ?? 'mysql') as $sql) {
+		db()->exec($sql);
+	}
+	simpan_pengaturan('versi_skema', '10');
+}
+
+function skema(string $driver): array
+{
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$teks = $driver === 'sqlite' ? 'TEXT' : 'MEDIUMTEXT';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+	return [
+		"CREATE TABLE pengguna (
+			id $id,
+			nama VARCHAR(150) NOT NULL,
+			email VARCHAR(190) NOT NULL UNIQUE,
+			whatsapp VARCHAR(30) NOT NULL DEFAULT '',
+			sandi VARCHAR(255) NOT NULL,
+			peran VARCHAR(10) NOT NULL DEFAULT 'pengaju',
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE buku (
+			id $id,
+			slug VARCHAR(190) NOT NULL UNIQUE,
+			judul VARCHAR(255) NOT NULL,
+			subjudul VARCHAR(255) NOT NULL DEFAULT '',
+			penulis VARCHAR(500) NOT NULL DEFAULT '',
+			editor VARCHAR(255) NOT NULL DEFAULT '',
+			kategori VARCHAR(120) NOT NULL DEFAULT '',
+			tahun VARCHAR(10) NOT NULL DEFAULT '',
+			status VARCHAR(20) NOT NULL DEFAULT 'segera_terbit',
+			isbn VARCHAR(30) NOT NULL DEFAULT '',
+			eisbn VARCHAR(30) NOT NULL DEFAULT '',
+			edisi VARCHAR(120) NOT NULL DEFAULT '',
+			halaman VARCHAR(40) NOT NULL DEFAULT '',
+			ukuran VARCHAR(60) NOT NULL DEFAULT '',
+			bahasa VARCHAR(60) NOT NULL DEFAULT 'Indonesia',
+			harga_cetak INT NOT NULL DEFAULT 0,
+			harga_ebook INT NOT NULL DEFAULT 0,
+			sampul VARCHAR(255) NOT NULL DEFAULT '',
+			ebook_path VARCHAR(255) NOT NULL DEFAULT '',
+			format VARCHAR(10) NOT NULL DEFAULT 'cetak',
+			cuplikan_path VARCHAR(255) NOT NULL DEFAULT '',
+			serah_cetak VARCHAR(10) NOT NULL DEFAULT '',
+			serah_digital VARCHAR(10) NOT NULL DEFAULT '',
+			deskripsi $teks,
+			tampil TINYINT NOT NULL DEFAULT 1,
+			pengajuan_id $fk NULL,
+			dibuat DATETIME NOT NULL
+		)$akhir",
+		"CREATE TABLE pengajuan (
+			id $id,
+			pengguna_id $fk NOT NULL,
+			judul VARCHAR(255) NOT NULL,
+			subjudul VARCHAR(255) NOT NULL DEFAULT '',
+			penulis VARCHAR(500) NOT NULL DEFAULT '',
+			kategori VARCHAR(120) NOT NULL DEFAULT '',
+			sinopsis $teks,
+			perkiraan_halaman INT NOT NULL DEFAULT 0,
+			ukuran VARCHAR(60) NOT NULL DEFAULT '',
+			jumlah_cetak_diminta INT NOT NULL DEFAULT 0,
+			jenis_karya VARCHAR(20) NOT NULL DEFAULT 'asli',
+			sisi_cetak VARCHAR(20) NOT NULL DEFAULT '',
+			warna_isi VARCHAR(20) NOT NULL DEFAULT '',
+			jenis_kertas VARCHAR(20) NOT NULL DEFAULT '',
+			jenis_sampul VARCHAR(20) NOT NULL DEFAULT '',
+			jilid VARCHAR(20) NOT NULL DEFAULT '',
+			paket VARCHAR(20) NOT NULL DEFAULT '',
+			format_terbit VARCHAR(10) NOT NULL DEFAULT 'cetak',
+			gramasi INT NOT NULL DEFAULT 0,
+			halaman_cetak INT NOT NULL DEFAULT 0,
+			harga_per_buku INT NOT NULL DEFAULT 0,
+			laminasi VARCHAR(20) NOT NULL DEFAULT '',
+			jumlah_cetak INT NOT NULL DEFAULT 0,
+			halaman_final VARCHAR(40) NOT NULL DEFAULT '',
+			tagihan_2 INT NOT NULL DEFAULT 0,
+			rincian_tagihan_2 VARCHAR(500) NOT NULL DEFAULT '',
+			resi VARCHAR(120) NOT NULL DEFAULT '',
+			status VARCHAR(30) NOT NULL DEFAULT 'DRAF',
+			buku_id $fk NULL,
+			dibuat DATETIME NOT NULL,
+			diubah DATETIME NOT NULL,
+			FOREIGN KEY (pengguna_id) REFERENCES pengguna(id)
+		)$akhir",
+		"CREATE TABLE berkas (
+			id $id,
+			pengajuan_id $fk NOT NULL,
+			jenis VARCHAR(20) NOT NULL,
+			path VARCHAR(255) NOT NULL,
+			nama_asli VARCHAR(255) NOT NULL,
+			ukuran INT NOT NULL DEFAULT 0,
+			pengunggah_id $fk NULL,
+			dibuat DATETIME NOT NULL,
+			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
+		)$akhir",
+		"CREATE TABLE pembayaran (
+			id $id,
+			pengajuan_id $fk NOT NULL,
+			tahap TINYINT NOT NULL,
+			nominal INT NOT NULL,
+			berkas_id $fk NULL,
+			status VARCHAR(12) NOT NULL DEFAULT 'menunggu',
+			catatan VARCHAR(500) NOT NULL DEFAULT '',
+			dibuat DATETIME NOT NULL,
+			diverifikasi DATETIME NULL,
+			pemeriksa_id $fk NULL,
+			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
+		)$akhir",
+		"CREATE TABLE catatan (
+			id $id,
+			pengajuan_id $fk NOT NULL,
+			pengguna_id $fk NULL,
+			isi $teks NOT NULL,
+			sistem TINYINT NOT NULL DEFAULT 0,
+			dibuat DATETIME NOT NULL,
+			FOREIGN KEY (pengajuan_id) REFERENCES pengajuan(id)
+		)$akhir",
+		skema_notifikasi($driver),
+		...skema_hki($driver),
+		"CREATE TABLE pengaturan (
+			k VARCHAR(60) NOT NULL PRIMARY KEY,
+			v $teks NOT NULL
+		)$akhir",
+	];
+}

@@ -1,0 +1,1235 @@
+<?php
+// Panel admin: dasbor, pengajuan, katalog, pengguna, pengaturan.
+
+declare(strict_types=1);
+
+function admin_dasbor(bool $post): void
+{
+	wajib_masuk('admin');
+	$hitung = [];
+	foreach (semua('SELECT status, COUNT(*) AS n FROM pengajuan GROUP BY status') as $r) {
+		$hitung[$r['status']] = (int) $r['n'];
+	}
+	$kotak = '';
+	foreach (STATUS as $kode => [$label, , $giliran]) {
+		if ($kode === 'DRAF') {
+			continue;
+		}
+		$n = $hitung[$kode] ?? 0;
+		$kotak .= '<a class="kotak-status' . ($giliran === 'admin' && $n ? ' kotak-status--tindakan' : '') . '" href="' . e(url('/admin/pengajuan?status=' . $kode)) . '"><span class="kotak-status__angka">' . $n . '</span><span>' . e($label) . '</span></a>';
+	}
+	$tindakan = semua("SELECT p.*, u.nama FROM pengajuan p JOIN pengguna u ON u.id = p.pengguna_id WHERE p.status IN ('VERIFIKASI_BAYAR_1','DITINJAU','PROSES_ISBN','VERIFIKASI_BAYAR_2','LUNAS') ORDER BY p.diubah ASC");
+	$hki_periksa = (int) satu("SELECT COUNT(*) AS n FROM hki WHERE status = 'DIPERIKSA'")['n'];
+	$belum_serah = count(array_filter(semua("SELECT * FROM buku WHERE status = 'terbit'"), fn ($b) => serah_kurang($b) !== []));
+	$isi = '<section class="panel"><h1>Dasbor Admin</h1>
+	<div class="kotak-status-grid">' . $kotak . '</div>
+	<h2>Menunggu tindakan Anda (' . count($tindakan) . ')</h2>' . tabel_pengajuan($tindakan) . '
+	' . ($belum_serah ? '<p class="pesan pesan--info">' . $belum_serah . ' buku sudah terbit tetapi wajib serah simpannya ke Perpusnas belum dicatat. <a href="' . e(url('/admin/buku')) . '">Buka Katalog</a></p>' : '') . '
+	' . ($hki_periksa ? '<p class="pesan pesan--info">' . $hki_periksa . ' permohonan HKI menunggu pemeriksaan. <a href="' . e(url('/admin/hki?status=DIPERIKSA')) . '">Buka Pengajuan HKI</a></p>' : '') . '
+	<p class="catatan">Jumlah buku di katalog: ' . (int) satu('SELECT COUNT(*) AS n FROM buku')['n'] . ' · Pengguna terdaftar: ' . (int) satu('SELECT COUNT(*) AS n FROM pengguna')['n'] . '</p></section>';
+	tampil('Dasbor Admin', $isi, ['panel' => menu_admin('/admin')]);
+}
+
+function tabel_pengajuan(array $daftar): string
+{
+	if (!$daftar) {
+		return '<p class="catatan">Tidak ada pengajuan.</p>';
+	}
+	$baris = '';
+	foreach ($daftar as $p) {
+		$baris .= '<tr><td><a href="' . e(url('/admin/pengajuan/' . $p['id'])) . '"><strong>' . e($p['judul']) . '</strong></a></td><td>' . e($p['nama']) . '</td><td>' . label_status($p['status']) . '</td><td class="angka">' . e(tanggal($p['diubah'])) . '</td></tr>';
+	}
+	return '<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Judul</th><th>Pengaju</th><th>Status</th><th>Diperbarui</th></tr></thead><tbody>' . $baris . '</tbody></table></div>';
+}
+
+function admin_pengajuan(bool $post): void
+{
+	wajib_masuk('admin');
+	$filter = (string) ($_GET['status'] ?? '');
+	$cari = trim((string) ($_GET['cari'] ?? ''));
+	$sql = 'SELECT p.*, u.nama FROM pengajuan p JOIN pengguna u ON u.id = p.pengguna_id WHERE 1=1';
+	$par = [];
+	if (isset(STATUS[$filter])) {
+		$sql .= ' AND p.status = ?';
+		$par[] = $filter;
+	}
+	if ($cari !== '') {
+		$sql .= ' AND (p.judul LIKE ? OR u.nama LIKE ?)';
+		$par[] = "%$cari%";
+		$par[] = "%$cari%";
+	}
+	$daftar = semua($sql . ' ORDER BY p.diubah DESC', $par);
+	$opsi = '<option value="">Semua status</option>';
+	foreach (STATUS as $k => [$label]) {
+		$opsi .= '<option value="' . $k . '"' . ($k === $filter ? ' selected' : '') . '>' . e($label) . '</option>';
+	}
+	$isi = '<section class="panel"><h1>Pengajuan</h1>
+	<form method="get" class="filter filter--admin"><label class="filter__isian"><span class="tersembunyi">Status</span><select name="status" id="f-status">' . $opsi . '</select></label><label class="filter__isian"><span class="tersembunyi">Cari</span><input type="search" name="cari" id="f-cari" placeholder="Judul atau nama pengaju" value="' . e($cari) . '"></label><div class="filter__tombol"><button class="tombol" type="submit">Tampilkan</button></div></form>
+	' . tabel_pengajuan($daftar) . '</section>';
+	tampil('Pengajuan', $isi, ['panel' => menu_admin('/admin/pengajuan')]);
+}
+
+function admin_pengajuan_detail(bool $post, string $id): void
+{
+	$admin = wajib_masuk('admin');
+	$p = satu('SELECT * FROM pengajuan WHERE id = ?', [(int) $id]);
+	if (!$p) {
+		tidak_ditemukan();
+	}
+	$pid = (int) $p['id'];
+	$aid = (int) $admin['id'];
+
+	if ($post) {
+		$aksi = $_POST['aksi'] ?? '';
+		$catatan = mb_substr(input('catatan'), 0, 2000);
+		$s = $p['status'];
+		try {
+			if ($aksi === 'berkas_isbn') {
+				$n = 0;
+				foreach (['permohonan_isbn', 'halaman_awal', 'naskah_watermark'] as $j) {
+					$n += simpan_unggahan($j, $j, $pid) ? 1 : 0;
+				}
+				if ($n) {
+					catat($pid, $aid, $n . ' berkas ISBN diunggah admin.', true);
+				}
+				pesan($n ? 'Berkas ISBN tersimpan.' : 'Pilih minimal satu berkas untuk diunggah.', $n ? 'ok' : 'info');
+			} elseif ($aksi === 'catatan' && input('isi') !== '') {
+				catat($pid, $aid, mb_substr(input('isi'), 0, 3000));
+				notif_pengajuan($p, 'Pesan dari admin: ' . mb_substr(input('isi'), 0, 200));
+				q('UPDATE pengajuan SET diubah = ? WHERE id = ?', [sekarang(), $pid]);
+				$pemilik = satu('SELECT * FROM pengguna WHERE id = ?', [$p['pengguna_id']]);
+				kirim_email($pemilik['email'], 'Pesan baru untuk pengajuan "' . $p['judul'] . '"', "Halo {$pemilik['nama']},\n\nAdmin " . $GLOBALS['SITUS']['nama'] . " mengirim pesan:\n\n" . input('isi') . "\n\nBalas di: " . url_absolut("/akun/pengajuan/$pid"));
+				pesan('Pesan terkirim.');
+			} elseif (in_array($aksi, ['terima_bayar', 'tolak_bayar'], true) && in_array($s, ['VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2'], true)) {
+				verifikasi_bayar($p, $aksi === 'terima_bayar', $catatan);
+				pesan('Status pembayaran diperbarui.');
+			} elseif ($aksi === 'revisi' && $s === 'DITINJAU') {
+				if ($catatan === '') {
+					throw new RuntimeException('Tulis catatan revisi untuk penulis.');
+				}
+				ubah_status($p, 'PERLU_REVISI', $catatan);
+				pesan('Permintaan revisi dikirim ke penulis.');
+			} elseif ($aksi === 'tagihan' && in_array($s, ['DITINJAU', 'PROSES_ISBN', 'MENUNGGU_BAYAR_2'], true)) {
+				$jumlah = (int) input('jumlah_cetak');
+				$tagihan = (int) preg_replace('/\D/', '', input('tagihan_2'));
+				$paket = isset(PAKET[input('paket')]) ? input('paket') : '';
+				$min = $paket ? PAKET[$paket][1] : CETAK_MIN;
+				$digital = $paket !== '' && PAKET[$paket][1] === 0;
+				if ($digital) {
+					$jumlah = 0;
+				}
+				if ($jumlah < $min || ($tagihan < 1 && !$digital)) {
+					throw new RuntimeException('Isi nominal pelunasan dan jumlah cetak (minimal ' . $min . ' eksemplar).');
+				}
+				$spek = [];
+				foreach (PILIHAN_CETAK as $k => [, $opsi]) {
+					$spek[$k] = isset($opsi[input($k)]) ? input($k) : (string) ($p[$k] ?? '');
+				}
+				$per_buku = (int) preg_replace('/\D/', '', input('harga_per_buku'));
+				$sebelum = ringkas_cetak($p);
+				$kolom = array_keys($spek);
+				q('UPDATE pengajuan SET paket = ? WHERE id = ?', [$paket, $pid]);
+				q('UPDATE pengajuan SET jumlah_cetak = ?, halaman_final = ?, halaman_cetak = ?, gramasi = ?, harga_per_buku = ?, tagihan_2 = ?, rincian_tagihan_2 = ?, ' . implode(' = ?, ', $kolom) . ' = ?, diubah = ? WHERE id = ?',
+					[$jumlah, input('halaman_final'), max(0, (int) input('halaman_cetak')), (int) input('gramasi'), $per_buku, $tagihan, input('rincian_tagihan_2'), ...array_values($spek), ...[sekarang(), $pid]]);
+				$sesudah = ringkas_cetak($spek);
+				if ($sesudah !== $sebelum) {
+					catat($pid, $aid, 'Spesifikasi cetak disesuaikan redaksi menjadi: ' . $sesudah . '.', true);
+				}
+				$harga_jual = (int) preg_replace('/\D/', '', input('harga_cetak'));
+				if ($p['buku_id'] && $harga_jual > 0) {
+					q('UPDATE buku SET harga_cetak = ? WHERE id = ?', [$harga_jual, $p['buku_id']]);
+				}
+				if ($s === 'DITINJAU') {
+					$bid = buat_buku_dari_pengajuan(satu('SELECT * FROM pengajuan WHERE id = ?', [$pid]), input('slug'), (int) preg_replace('/\D/', '', input('harga_cetak')));
+					q('UPDATE pengajuan SET buku_id = ? WHERE id = ?', [$bid, $pid]);
+					ubah_status($p, 'PROSES_ISBN', 'Tagihan pelunasan ' . rupiah($tagihan) . ' untuk ' . $jumlah . ' eksemplar ditetapkan. Halaman buku dibuat di katalog.');
+					pesan('Tagihan ditetapkan dan halaman buku dibuat. Gunakan link halaman buku untuk pengajuan ISBN.');
+				} else {
+					catat($pid, $aid, 'Tagihan pelunasan diperbarui menjadi ' . rupiah($tagihan) . ' (' . $jumlah . ' eksemplar).', true);
+					pesan('Tagihan diperbarui.');
+				}
+			} elseif ($aksi === 'isbn' && $s === 'PROSES_ISBN') {
+				$isbn = input('isbn');
+				if (!preg_match('/^[0-9Xx-]{10,17}$/', $isbn)) {
+					throw new RuntimeException('Nomor ISBN tidak valid. Contoh: 978-623-00-1234-5');
+				}
+				$format = $p['format_terbit'] ?? 'cetak';
+				if ($format === 'keduanya' && !preg_match('/^[0-9Xx-]{10,17}$/', input('eisbn'))) {
+					throw new RuntimeException('Isi juga ISBN e-book (e-ISBN) yang valid.');
+				}
+				if ($p['buku_id']) {
+					// E-book saja: nomor yang terbit adalah e-ISBN, bukan ISBN buku cetak.
+					q("UPDATE buku SET isbn = ?, eisbn = ?, status = 'terbit' WHERE id = ?", $format === 'ebook'
+						? ['', $isbn, $p['buku_id']]
+						: [$isbn, input('eisbn'), $p['buku_id']]);
+				}
+				if ((int) $p['tagihan_2'] <= 0) {
+					ubah_status($p, 'SELESAI', 'ISBN terbit: ' . $isbn . '. Tidak ada pelunasan; penerbitan selesai.');
+					pesan('ISBN tersimpan. Tidak ada pelunasan, pengajuan selesai. Unggah file e-book di Katalog bila akan dijual.');
+				} else {
+					ubah_status($p, 'MENUNGGU_BAYAR_2', 'ISBN terbit: ' . $isbn . '. Silakan bayar pelunasan ' . rupiah($p['tagihan_2']) . '.');
+					pesan('ISBN tersimpan. Buku berstatus Sudah Terbit dan tagihan pelunasan dibuka.');
+				}
+			} elseif ($aksi === 'selesai' && $s === 'LUNAS') {
+				q('UPDATE pengajuan SET resi = ? WHERE id = ?', [input('resi'), $pid]);
+				ubah_status($p, 'SELESAI', input('resi') ? 'Nomor resi: ' . input('resi') : null);
+				pesan('Pengajuan ditandai selesai.');
+			} elseif ($aksi === 'tolak' && !in_array($s, ['SELESAI', 'DITOLAK'], true)) {
+				if ($catatan === '') {
+					throw new RuntimeException('Tulis alasan penolakan pengajuan.');
+				}
+				ubah_status($p, 'DITOLAK', $catatan);
+				pesan('Pengajuan ditolak.');
+			}
+		} catch (RuntimeException $ex) {
+			pesan($ex->getMessage(), 'galat');
+		}
+		arahkan('/admin/pengajuan/' . $pid);
+	}
+
+	$pengaju = satu('SELECT * FROM pengguna WHERE id = ?', [$p['pengguna_id']]);
+	$buku = $p['buku_id'] ? satu('SELECT * FROM buku WHERE id = ?', [$p['buku_id']]) : null;
+	$biaya_awal = (int) pengaturan('biaya_awal', '250000');
+	$form = fn (string $aksi, string $isi, string $tombol, string $kelas = 'tombol') => '<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="' . $aksi . '">' . $isi . '<button type="submit" class="' . $kelas . '">' . $tombol . '</button></form>';
+
+	$form_tagihan = function (bool $buat_buku) use ($p, $form, $buku, $biaya_awal) {
+		$spek = '';
+		$nilai_spek = [];
+		foreach (PILIHAN_CETAK as $k => [$judul, $opsi]) {
+			$nilai = isset($opsi[$p[$k] ?? '']) ? (string) $p[$k] : (string) array_key_first($opsi);
+			$nilai_spek[$k] = $nilai;
+			$spek .= '<div><label for="spek_' . $k . '">' . e($judul) . '</label><select id="spek_' . $k . '" name="' . $k . '" data-spek="' . $k . '">'
+				. implode('', array_map(fn ($n, $o) => '<option value="' . e((string) $n) . '"' . ((string) $n === $nilai ? ' selected' : '') . '>' . e($o[0]) . '</option>', array_keys($opsi), $opsi))
+				. '</select></div>';
+		}
+		// Pilihan gramasi untuk kombinasi kertas ini (diperbarui otomatis oleh taksiran.js)
+		$gram = array_column(semua('SELECT gramasi FROM harga_kertas WHERE ukuran=? AND kertas=? AND warna=? AND sisi=? ORDER BY gramasi', [kode_ukuran($nilai_spek['ukuran']), $nilai_spek['jenis_kertas'], $nilai_spek['warna_isi'], $nilai_spek['sisi_cetak']]), 'gramasi');
+		$gram_pilih = in_array((int) $p['gramasi'], array_map('intval', $gram), true) ? (int) $p['gramasi'] : (int) ($gram[0] ?? 0);
+		$opsi_gram = implode('', array_map(fn ($g) => '<option value="' . (int) $g . '"' . ((int) $g === $gram_pilih ? ' selected' : '') . '>' . (int) $g . ' gr</option>', $gram)) ?: '<option value="0">belum ada di daftar harga</option>';
+		$halaman = (int) ($p['halaman_cetak'] ?: hitung_halaman((string) $p['halaman_final']) ?: $p['perkiraan_halaman']);
+		$t = taksiran_cetak($nilai_spek + $p, $halaman, $gram_pilih);
+		$jumlah = (int) ($p['jumlah_cetak'] ?: $p['jumlah_cetak_diminta']);
+		$margin = margin_cetak();
+		$per_buku = (int) ($p['harga_per_buku'] ?: round($t['per_buku'] * (100 + $margin) / 10000) * 100);
+		$data = data_harga();
+		$data['biaya_awal'] = $biaya_awal;
+		$data['paket'] = data_paket();
+		$data['margin'] = $margin;
+		$data['per_buku_std'] = per_buku_standar();
+		$paket = isset(PAKET[$p['paket'] ?? '']) ? $p['paket'] : 'aksara'; // pengajuan lama (sebelum ada paket) dianggap Paket Aksara
+		$opsi_paket = '';
+		$cocok = paket_untuk_format($p['format_terbit'] ?? 'cetak');
+		foreach ($data['paket'] as $k => $pk) {
+			if (!in_array($k, $cocok, true) && $k !== $paket) {
+				continue;
+			}
+			$opsi_paket .= '<option value="' . $k . '"' . ($k === $paket ? ' selected' : '') . '>' . e($pk['nama'] . ' · ' . rupiah($pk['harga']) . ' · ' . ($pk['eks'] ? $pk['eks'] . ' eks' : 'tanpa cetak')) . '</option>';
+		}
+		if (($p['format_terbit'] ?? 'cetak') !== 'ebook') {
+			$opsi_paket .= '<option value=""' . ($paket === '' ? ' selected' : '') . '>Tanpa paket (hitung per buku)</option>';
+		}
+		$min = $paket ? PAKET[$paket][1] : CETAK_MIN;
+
+		$isi = '<div data-taksiran>
+		<p class="pesan pesan--info" data-blok-digital hidden>Paket Digital: tanpa cetak. Harga paket sudah lunas dengan uang muka, jadi pelunasan Rp0. Setelah ISBN e-book disimpan, pengajuan langsung selesai.</p>
+		<div data-blok-cetak>
+		<h4 class="subjudul-form">1. Spesifikasi cetak</h4><p class="catatan">Sesuai pilihan penulis: <strong>' . e(ringkas_cetak($p)) . '</strong>. Ubah bila disepakati lain dengan penulis.</p>
+		<div class="kolom-2">' . $spek . '<div><label for="gramasi">Berat kertas isi</label><select id="gramasi" name="gramasi" data-gramasi>' . $opsi_gram . '</select></div></div>
+
+		<h4 class="subjudul-form">2. Taksiran biaya cetak per buku</h4>
+		<div class="kolom-2">
+			<div><label for="halaman_final">Jumlah halaman final <span class="catatan">(tertulis di buku)</span></label><input id="halaman_final" name="halaman_final" placeholder="mis. xxix + 265" value="' . e($p['halaman_final']) . '" data-halaman-final></div>
+			<div><label for="halaman_cetak">Total halaman dicetak</label><input type="number" min="0" id="halaman_cetak" name="halaman_cetak" value="' . ($halaman ?: '') . '" data-halaman><span class="catatan">Terisi otomatis dari halaman final (Romawi + angka).</span></div>
+		</div>
+		<table class="taksiran">
+			<tr><th>Kertas isi</th><td data-t="rumus">' . e($t['lembar'] . ' ' . ($nilai_spek['sisi_cetak'] === '2' && $data['per_lembar'] ? 'lembar' : 'halaman') . ' × ' . rupiah($t['harga_kertas'])) . '</td><td data-t="isi">' . rupiah($t['isi']) . '</td></tr>
+			<tr><th>Cover &amp; jilid</th><td data-t="rumus-cover">' . e(label_cetak('jenis_sampul', $nilai_spek['jenis_sampul']) . ', ' . label_cetak('jilid', $nilai_spek['jilid']) . ', ' . label_cetak('laminasi', $nilai_spek['laminasi'])) . '</td><td data-t="cover">' . rupiah($t['cover']) . '</td></tr>
+			<tr class="taksiran__total"><th colspan="2">Taksiran harga cetak per buku</th><td data-t="per_buku">' . rupiah($t['per_buku']) . '</td></tr>
+		</table>
+		<table class="taksiran taksiran--berat">
+			<tr><th>Berat per buku</th><td>kertas isi + cover</td><td data-b="buku">-</td></tr>
+			<tr><th>Total cetak</th><td data-b="n-total">-</td><td data-b="total">-</td></tr>
+			<tr><th>Kiriman ke penulis</th><td data-b="n-penulis">-</td><td data-b="penulis">-</td></tr>
+			<tr><th>Wajib serah ke Perpusnas</th><td>2 eks + kemasan</td><td data-b="perpusnas">-</td></tr>
+			<tr><th>Wajib serah ke Perpusda</th><td>1 eks + kemasan</td><td data-b="perpusda">-</td></tr>
+		</table>
+		<p class="catatan">Berat adalah taksiran untuk ongkir: kertas (luas × gramasi), cover, dan kemasan ±100 g per kiriman. Kurir membulatkan ke atas per kg. Buku arsip penerbit tidak dikirim.</p>
+		<p class="pesan pesan--info taksiran__catatan" data-t="catatan"' . ($t['catatan'] ? '' : ' hidden') . '>' . e(implode(' ', $t['catatan'])) . ' Isi harga per buku secara manual atau lengkapi <a href="' . e(url('/admin/harga')) . '">daftar harga</a>.</p>
+
+		</div>
+		<h4 class="subjudul-form">3. Paket, harga, dan tagihan pelunasan</h4>
+		<div class="kolom-2">
+			<div><label for="paket">Paket penerbitan</label><select id="paket" name="paket" data-paket>' . $opsi_paket . '</select></div>
+			<div><label for="jumlah_cetak">Jumlah eksemplar dicetak <span class="catatan">(min. <span data-min-eks>' . $min . '</span>)</span></label><input type="number" min="' . $min . '" id="jumlah_cetak" name="jumlah_cetak" required value="' . ($paket === 'digital' ? 0 : $jumlah) . '" data-jumlah></div>
+			<div><label for="harga_per_buku">Harga cetak per buku (Rp) <span class="catatan">(taksiran + margin ' . $margin . '%)</span></label><input id="harga_per_buku" name="harga_per_buku" inputmode="numeric" data-rupiah value="' . ($per_buku ?: '') . '" data-per-buku' . ($p['harga_per_buku'] ? ' data-manual="1"' : '') . '><button type="button" class="tautan-tombol" data-pakai-taksiran>Pakai taksiran</button></div>
+			<div><label for="tagihan_2">Nominal pelunasan (Rp)</label><input id="tagihan_2" name="tagihan_2" inputmode="numeric" data-rupiah required value="' . e((string) ($p['tagihan_2'] ?: ($paket === 'digital' ? '0' : ''))) . '" data-tagihan' . ($p['tagihan_2'] ? ' data-manual="1"' : '') . '>
+				<label class="centang" data-hanya-tanpa-paket><input type="checkbox" data-potong> Kurangi biaya awal ' . rupiah($biaya_awal) . '</label></div>
+			<div class="lebar-penuh"><label for="rincian_tagihan_2">Rincian untuk penulis</label><textarea id="rincian_tagihan_2" name="rincian_tagihan_2" rows="2" class="isian-tumbuh" placeholder="mis. 5 eks × Rp45.000" data-rincian' . ($p['rincian_tagihan_2'] ? ' data-manual="1"' : '') . '>' . e($p['rincian_tagihan_2']) . '</textarea></div>
+			<div><label for="harga_cetak">Harga jual di katalog (Rp' . ($buat_buku ? ', opsional' : '') . ')</label><input id="harga_cetak" name="harga_cetak" inputmode="numeric" data-rupiah value="' . e((string) (($buku['harga_cetak'] ?? 0) ?: '')) . '"></div>';
+		if ($buat_buku) {
+			$isi .= '<div><label for="slug">Link halaman buku</label><input id="slug" name="slug" value="' . e(slugify($p['judul'])) . '" pattern="[a-z0-9-]+"><span class="catatan">bookstore.literaindo.com/buku/<em>link</em>/ — tidak boleh diubah setelah dikirim ke Perpusnas</span></div>';
+		}
+		$isi .= '</div>
+		<table class="taksiran taksiran--paket" data-rincian-paket>
+			<tr><th data-p="nama">Harga paket</th><td></td><td data-p="harga">-</td></tr>
+			<tr><th>Selisih spesifikasi</th><td data-p="ket-selisih">-</td><td data-p="selisih">-</td></tr>
+			<tr><th>Eksemplar tambahan</th><td data-p="ket-tambah">-</td><td data-p="tambah">-</td></tr>
+			<tr><th>Total</th><td></td><td data-p="total">-</td></tr>
+			<tr><th>Uang muka (biaya awal)</th><td>sudah dibayar</td><td data-p="dp">-</td></tr>
+			<tr class="taksiran__total"><th colspan="2">Pelunasan</th><td data-p="pelunasan">-</td></tr>
+		</table>
+		<p class="catatan">Selisih spesifikasi muncul bila harga cetak per buku lebih mahal dari buku standar paket (A5, ' . batas_halaman_paket() . ' halaman, HVS hitam putih, soft cover) yaitu ' . rupiah($data['per_buku_std']) . ' per buku. Nominal pelunasan dan rinciannya terisi otomatis. Periksa, ubah bila perlu, lalu simpan untuk mengesahkan.</p></div>
+		<script type="application/json" id="data-harga">' . json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>
+		<script src="' . e(url('/assets/js/taksiran.js')) . '?v=7" defer></script>';
+		return $form('tagihan', $isi, $buat_buku ? 'Tetapkan Tagihan &amp; Buat Halaman Buku' : 'Perbarui Tagihan');
+	};
+	$catatan_input = fn (string $label, string $id) => '<label for="' . $id . '">' . $label . '</label><textarea id="' . $id . '" name="catatan" rows="3"></textarea>';
+
+	$bukti = function (int $tahap) use ($pid) {
+		$b = satu('SELECT py.*, b.id AS bid, b.nama_asli FROM pembayaran py LEFT JOIN berkas b ON b.id = py.berkas_id WHERE py.pengajuan_id = ? AND py.tahap = ? ORDER BY py.id DESC LIMIT 1', [$pid, $tahap]);
+		return $b ? '<p>Nominal: <strong>' . rupiah($b['nominal']) . '</strong> · diunggah ' . e(tanggal($b['dibuat'])) . '</p><p><a class="tombol tombol--kedua" href="' . e(url('/berkas/' . $b['bid'])) . '" target="_blank">' . ikon('unduh') . ' Lihat bukti bayar</a></p>' : '';
+	};
+
+	$aksi = match ($p['status']) {
+		'DRAF' => '<p>Penulis belum mengirim pengajuan.</p>',
+		'MENUNGGU_BAYAR_1' => '<p>Menunggu penulis membayar biaya awal ' . rupiah($biaya_awal) . '.</p>',
+		'MENUNGGU_BAYAR_2' => '<p>Menunggu penulis membayar pelunasan ' . rupiah($p['tagihan_2']) . '.</p><details><summary>Ubah tagihan</summary>' . $form_tagihan(false) . '</details>',
+		'VERIFIKASI_BAYAR_1', 'VERIFIKASI_BAYAR_2' => '<p>Bukti bayar sedang menunggu verifikasi oleh <strong>bagian keuangan</strong> di <a href="' . e(url('/keuangan')) . '">Panel Keuangan</a>.</p>' . $bukti($p['status'] === 'VERIFIKASI_BAYAR_1' ? 1 : 2)
+			. '<details><summary>Verifikasi sendiri sebagai admin</summary><p class="catatan">Gunakan hanya jika bagian keuangan berhalangan. Cocokkan dengan mutasi rekening/QRIS sebelum menerima.</p><div class="aksi-baris">' . $form('terima_bayar', '', 'Terima Pembayaran')
+			. '<details><summary>Tolak bukti bayar</summary>' . $form('tolak_bayar', $catatan_input('Alasan (dikirim ke penulis)', 'c-tolak-bayar'), 'Tolak Bukti', 'tombol tombol--bahaya') . '</details></div></details>',
+		'DITINJAU' => '<h3>Setelah naskah siap: tetapkan tagihan pelunasan</h3><p class="catatan">Halaman buku akan dibuat di katalog (Segera Terbit) agar linknya bisa dipakai untuk pengajuan ISBN. Penulis membayar pelunasan setelah ISBN terbit.</p>' . $form_tagihan(true)
+			. '<details><summary>Minta revisi ke penulis</summary>' . $form('revisi', $catatan_input('Catatan revisi', 'c-revisi'), 'Kirim Permintaan Revisi', 'tombol tombol--kedua') . '</details>',
+		'PERLU_REVISI' => '<p>Menunggu penulis mengirim naskah revisi.</p>',
+		'PROSES_ISBN' => ($buku ? '<p>Link untuk Perpusnas: <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a> · <a href="' . e(url('/admin/buku/' . $buku['id'])) . '">ubah data buku</a></p>' : '')
+			. '<h3>ISBN sudah terbit?</h3>' . $form('isbn', (($p['format_terbit'] ?? 'cetak') === 'ebook'
+				? '<label for="isbn">ISBN e-book</label><input id="isbn" name="isbn" required placeholder="978-623-xx-xxxx-x">'
+				: '<div class="kolom-2"><div><label for="isbn">ISBN buku cetak</label><input id="isbn" name="isbn" required placeholder="978-623-xx-xxxx-x"></div><div><label for="eisbn">ISBN e-book (e-ISBN)' . (($p['format_terbit'] ?? 'cetak') === 'keduanya' ? '' : ' (opsional)') . '</label><input id="eisbn" name="eisbn"' . (($p['format_terbit'] ?? 'cetak') === 'keduanya' ? ' required' : '') . '></div></div>'), 'Simpan ISBN &amp; Buka Tagihan Pelunasan')
+			. '<details><summary>Ubah tagihan</summary>' . $form_tagihan(false) . '</details>',
+		'LUNAS' => '<p>Lunas. Setelah buku dicetak dan dikirim ke penulis, tandai selesai.</p>' . $form('selesai', '<label for="resi">Nomor resi pengiriman (opsional)</label><input id="resi" name="resi">', 'Tandai Selesai'),
+		'SELESAI' => '<p>Selesai.' . ($p['resi'] ? ' Resi: ' . e($p['resi']) : '') . '</p>',
+		'DITOLAK' => '<p>Pengajuan ditolak.</p>',
+		default => '',
+	};
+	// Daftar periksa berkas ISBN, urut sesuai daftar "File berkas" di isbn.perpusnas.go.id.
+	$jk = JENIS_KARYA[$p['jenis_karya'] ?? 'asli'] ?? JENIS_KARYA['asli'];
+	$jenis = $p['jenis_karya'] ?? 'asli';
+	$cek = [
+		['a', 'Surat permohonan', 'permohonan_isbn', ''],
+		['b', 'Surat pernyataan keaslian karya', 'pernyataan', $jenis === 'asli' ? '' : 'hanya untuk karya asli'],
+		['c', 'Surat izin penerjemahan', 'izin_terjemah', $jenis === 'terjemahan' ? '' : 'hanya untuk buku terjemahan'],
+		['d', 'Surat pengalihan penerbitan', 'pengalihan', $jenis === 'dialihkan' ? '' : 'hanya jika ada pengalihan penerbitan'],
+		['e', 'Halaman judul, balik halaman judul, daftar isi, dan kata pengantar, digabung 1 PDF kurang dari 2 MB', 'halaman_awal', ''],
+	];
+	$li = '';
+	$butir = function (string $tanda, string $label, ?array $b, string $kelas = '', string $kosong = 'belum ada') {
+		return '<li class="' . ($kelas !== '' ? $kelas : ($b ? 'ada' : 'belum')) . '"><span class="periksa__tanda" aria-hidden="true">' . ($b ? '✓' : ($kelas === 'tidak-perlu' ? '–' : '')) . '</span><span>' . $tanda . e($label)
+			. ($b ? ' · <a href="' . e(url('/berkas/' . $b['id'])) . '">' . e($b['nama_asli']) . '</a>' : ($kosong !== '' ? ' · <em>' . e($kosong) . '</em>' : '')) . '</span></li>';
+	};
+	foreach ($cek as [$huruf, $label, $j, $tidak_perlu]) {
+		$b = berkas_terakhir($pid, $j);
+		$li .= $tidak_perlu !== '' && !$b
+			? $butir('<strong>' . $huruf . '.</strong> ', $label . ' (' . $tidak_perlu . ')', null, 'tidak-perlu', 'tidak perlu')
+			: $butir('<strong>' . $huruf . '.</strong> ', $label, $b);
+	}
+	// Pelengkap di luar daftar file berkas Perpusnas.
+	$tambahan = '';
+	if ($jenis === 'milik_umum') {
+		$tambahan .= $butir('', 'Surat keterangan karya milik umum', berkas_terakhir($pid, 'keterangan_pd'));
+	}
+	$tambahan .= '<li class="' . ($buku ? 'ada' : 'belum') . '"><span class="periksa__tanda" aria-hidden="true">' . ($buku ? '✓' : '') . '</span><span>Link katalog buku di website'
+		. ($buku ? ' · <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a>' : ' · <em>dibuat saat tagihan pelunasan ditetapkan</em>') . '</span></li>';
+	if ($w = berkas_terakhir($pid, 'naskah_watermark')) {
+		$tambahan .= $butir('', 'Naskah ber-watermark (arsip, tidak wajib)', $w);
+	}
+	$kotak_isbn = $p['status'] === 'DRAF' ? '' : '<div class="kotak-dalam"><h3>Berkas ISBN</h3>
+		<p class="catatan">Jenis karya: <strong>' . e($jk[0]) . '</strong>. Butir a–e mengikuti daftar file berkas di isbn.perpusnas.go.id. Lengkapi butir yang wajib sebelum mengajukan.</p>
+		<ul class="periksa">' . $li . '</ul>
+		<p class="catatan"><strong>Pelengkap</strong></p>
+		<ul class="periksa">' . $tambahan . '</ul>
+		<details><summary>Unggah berkas a dan e</summary><form method="post" enctype="multipart/form-data" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="berkas_isbn">
+			<label for="permohonan_isbn">a. Surat permohonan <span class="catatan">(PDF/JPG/PNG, maks. 5 MB)</span></label><input type="file" id="permohonan_isbn" name="permohonan_isbn" accept=".pdf,.jpg,.jpeg,.png">
+			<label for="halaman_awal">e. Halaman judul, balik halaman judul, daftar isi, dan kata pengantar <span class="catatan">(digabung jadi 1 file PDF, kurang dari 2 MB)</span></label><input type="file" id="halaman_awal" name="halaman_awal" accept=".pdf">
+			<p class="catatan">Butir b, c, dan d diunggah penulis saat mengirim naskah.</p>
+			<details><summary>Naskah ber-watermark (arsip, tidak wajib)</summary><label for="naskah_watermark">Naskah ber-watermark <span class="catatan">(PDF, maks. 30 MB)</span></label><input type="file" id="naskah_watermark" name="naskah_watermark" accept=".pdf"></details>
+			<button type="submit" class="tombol">Simpan Berkas</button></form></details></div>';
+
+	if (!in_array($p['status'], ['SELESAI', 'DITOLAK'], true)) {
+		$aksi .= '<details class="bahaya"><summary>Tolak pengajuan</summary>' . $form('tolak', $catatan_input('Alasan penolakan (dikirim ke penulis)', 'c-tolak'), 'Tolak Pengajuan', 'tombol tombol--bahaya') . '</details>';
+	}
+
+	$hki = hki_pengajuan($pid);
+	$data_pengajuan = '<div class="dua-kolom">
+		<section><h3>Pengaju</h3><dl class="data-ringkas">
+			<div><dt>Nama</dt><dd>' . e($pengaju['nama']) . '</dd></div>
+			<div><dt>Email</dt><dd>' . e($pengaju['email']) . '</dd></div>
+			<div><dt>WhatsApp</dt><dd><a href="https://wa.me/' . e(preg_replace('/^0/', '62', (string) preg_replace('/\D/', '', $pengaju['whatsapp']))) . '" target="_blank">' . e($pengaju['whatsapp']) . '</a></dd></div>
+		</dl>
+		<h3>Data buku</h3><dl class="data-ringkas">
+			<div><dt>Subjudul</dt><dd>' . e($p['subjudul']) . '</dd></div>
+			<div><dt>Penulis</dt><dd>' . nl2br(e($p['penulis'])) . '</dd></div>
+			<div><dt>Kategori</dt><dd>' . e($p['kategori']) . '</dd></div>
+			<div><dt>Jenis karya</dt><dd>' . e($jk[0]) . '</dd></div>
+			<div><dt>Jenis ISBN</dt><dd>' . e(FORMAT_TERBIT[$p['format_terbit'] ?? 'cetak'][0] ?? '-') . '</dd></div>
+			<div><dt>Paket</dt><dd>' . e(PAKET[$p['paket']][0] ?? '-') . '</dd></div>
+			' . ($hki ? '<div><dt>HKI</dt><dd><a href="' . e(url('/admin/hki/' . $hki['id'])) . '">' . e(STATUS_HKI[$hki['status']][0]) . '</a></dd></div>' : (($p['paket'] ?? '') === 'pustaka' ? '<div><dt>HKI</dt><dd>Termasuk paket; penulis belum mengisi data HKI</dd></div>' : '')) . '
+			' . data_cetak($p) . '
+			<div><dt>Perkiraan halaman</dt><dd>' . e((string) $p['perkiraan_halaman']) . '</dd></div>
+			<div><dt>Cetak diminta</dt><dd>' . e((string) $p['jumlah_cetak_diminta']) . ' eksemplar</dd></div>
+			' . ($p['tagihan_2'] ? '<div><dt>Pelunasan</dt><dd>' . rupiah($p['tagihan_2']) . ' (' . e((string) $p['jumlah_cetak']) . ' eks.)</dd></div>' : '') . '
+		</dl></section>
+		<section><h3>Sinopsis</h3><p>' . nl2br(e($p['sinopsis'])) . '</p>
+		<h3>Berkas</h3>' . daftar_berkas($pid) . '</section>
+	</div>';
+
+	$tautan = '/admin/pengajuan/' . $pid;
+	$status = $p['status'];
+	$berkas_naskah = '<h3>Berkas naskah</h3>' . daftar_berkas_jenis($pid, ['naskah', 'sampul', 'pernyataan', 'izin_terjemah', 'pengalihan', 'keterangan_pd']);
+	$nomor_isbn = $buku ? implode('', array_filter([
+		($buku['isbn'] ?? '') !== '' ? '<div><dt>ISBN</dt><dd>' . e($buku['isbn']) . '</dd></div>' : '',
+		($buku['eisbn'] ?? '') !== '' ? '<div><dt>e-ISBN</dt><dd>' . e($buku['eisbn']) . '</dd></div>' : '',
+	])) : '';
+	if ($status === 'DITOLAK') {
+		$halaman = '<div class="kotak-langkah kotak-langkah--admin"><h2>Pengajuan ditolak</h2>' . $aksi . $data_pengajuan . '</div>';
+	} else {
+		$sekarang = posisi_tahap($status);
+		$dipilih = tahap_dipilih($status);
+		if ($dipilih === $sekarang) {
+			// Tahap sekarang: tindakan admin beserta bahan yang dibutuhkan di tahap ini.
+			$tambahan = [
+				0 => $data_pengajuan,
+				2 => $berkas_naskah,
+				3 => $kotak_isbn,
+			];
+			$isi_tahap = $aksi . ($tambahan[$dipilih] ?? '');
+		} else {
+			$lewat = [
+				0 => '<p>Pengajuan dikirim penulis.</p>' . $data_pengajuan,
+				1 => '<p>Biaya awal sudah diterima.</p>' . $bukti(1),
+				2 => '<p>Naskah sudah disetujui dan tagihan pelunasan ditetapkan' . ($p['tagihan_2'] ? ': <strong>' . rupiah($p['tagihan_2']) . '</strong> (' . e((string) $p['jumlah_cetak']) . ' eks.)' : '') . '.</p>'
+					. ($buku ? '<p>Halaman buku: <a href="' . e(url(buku_url($buku))) . '" target="_blank">' . e(url_absolut(buku_url($buku))) . '</a></p>' : '') . $berkas_naskah,
+				3 => '<p>ISBN sudah terbit.</p>' . ($nomor_isbn ? '<dl class="data-ringkas">' . $nomor_isbn . '</dl>' : '') . $kotak_isbn,
+				4 => '<p>Pelunasan sudah diterima.</p>' . $bukti(2),
+			];
+			$isi_tahap = $lewat[$dipilih] ?? '';
+		}
+		$halaman = halaman_tahap($dipilih, $status, $isi_tahap, $tautan, 'kotak-langkah kotak-langkah--admin');
+	}
+
+	$isi = '<section class="panel">
+	<p><a href="' . e(url('/admin/pengajuan')) . '">← Semua pengajuan</a></p>
+	<div class="judul-baris"><h1>' . e($p['judul']) . '</h1>' . label_status($status) . '</div>
+	' . ($status !== 'DITOLAK' ? stepper($status, $tautan, $dipilih) : '') . '
+	' . $halaman . '
+	' . lipatan_riwayat($pid, false) . '
+</section>';
+	tampil($p['judul'], $isi, ['panel' => menu_admin('/admin/pengajuan')]);
+}
+
+function slug_unik(string $slug, int $kecuali = 0): string
+{
+	$dasar = slugify($slug);
+	$coba = $dasar;
+	for ($i = 2; satu('SELECT id FROM buku WHERE slug = ? AND id <> ?', [$coba, $kecuali]); $i++) {
+		$coba = "$dasar-$i";
+	}
+	return $coba;
+}
+
+function buat_buku_dari_pengajuan(array $p, string $slug, int $harga_cetak): int
+{
+	$format = isset(FORMAT_BUKU[$p['format_terbit'] ?? '']) ? $p['format_terbit'] : 'cetak';
+	q('INSERT INTO buku (slug, judul, subjudul, penulis, kategori, tahun, status, format, halaman, ukuran, bahasa, harga_cetak, sampul, deskripsi, tampil, pengajuan_id, dibuat) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [
+		slug_unik($slug !== '' ? $slug : $p['judul']), $p['judul'], $p['subjudul'], $p['penulis'], $p['kategori'], date('Y'), 'segera_terbit', $format,
+		$p['halaman_final'], $p['ukuran'], 'Indonesia', $format === 'ebook' ? 0 : $harga_cetak, terbitkan_sampul((int) $p['id']), $p['sinopsis'], 1, $p['id'], sekarang(),
+	]);
+	return (int) db()->lastInsertId();
+}
+
+/** Daftar wajib serah simpan yang belum dicatat untuk buku yang sudah terbit. */
+function serah_kurang(array $b): array
+{
+	if ($b['status'] !== 'terbit') {
+		return [];
+	}
+	return array_values(array_filter([
+		ada_cetak($b) && $b['serah_cetak'] === '' ? 'cetak' : '',
+		ada_ebook($b) && $b['serah_digital'] === '' ? 'e-book' : '',
+	]));
+}
+
+function status_serah(array $b): string
+{
+	if ($b['status'] !== 'terbit') {
+		return '<span class="catatan">Belum terbit</span>';
+	}
+	$kurang = serah_kurang($b);
+	return $kurang
+		? '<span class="lencana lencana--giliran">Belum: ' . e(implode(', ', $kurang)) . '</span>'
+		: '<span class="lencana lencana--selesai">Lengkap</span>';
+}
+
+function admin_buku(bool $post): void
+{
+	wajib_masuk('admin');
+	$baris = '';
+	foreach (semua('SELECT * FROM buku ORDER BY dibuat DESC, id DESC') as $b) {
+		$nomor = array_filter([ada_cetak($b) && $b['isbn'] !== '' ? 'ISBN ' . $b['isbn'] : '', ada_ebook($b) && $b['eisbn'] !== '' ? 'e-ISBN ' . $b['eisbn'] : '']);
+		$baris .= '<tr><td><a href="' . e(url('/admin/buku/' . $b['id'])) . '"><strong>' . e($b['judul']) . '</strong></a>' . ($b['tampil'] ? '' : ' <span class="lencana lencana--tolak">Disembunyikan</span>') . '</td><td>' . e(implode(', ', penulis_daftar($b['penulis']))) . '</td><td>' . e(FORMAT_BUKU[$b['format']] ?? 'Cetak') . '</td><td>' . ($b['status'] === 'terbit' ? 'Sudah Terbit' : 'Segera Terbit') . '</td><td>' . e(implode(' · ', $nomor)) . '</td><td>' . status_serah($b) . '</td><td><a href="' . e(url(buku_url($b))) . '" target="_blank">Lihat</a></td></tr>';
+	}
+	$isi = '<section class="panel"><div class="judul-baris"><h1>Katalog</h1><a class="tombol" href="' . e(url('/admin/buku/baru')) . '">Tambah Buku</a></div>
+	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Judul</th><th>Penulis</th><th>Format</th><th>Status</th><th>ISBN</th><th>Serah simpan</th><th></th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
+	tampil('Katalog', $isi, ['panel' => menu_admin('/admin/buku')]);
+}
+
+function admin_buku_form(bool $post, string $id = ''): void
+{
+	wajib_masuk('admin');
+	$b = $id !== '' ? satu('SELECT * FROM buku WHERE id = ?', [(int) $id]) : null;
+	if ($id !== '' && !$b) {
+		tidak_ditemukan();
+	}
+	$kolom = ['judul', 'subjudul', 'penulis', 'editor', 'kategori', 'tahun', 'isbn', 'eisbn', 'edisi', 'halaman', 'ukuran', 'bahasa', 'deskripsi', 'format', 'serah_cetak', 'serah_digital'];
+	$v = $b ?: array_fill_keys($kolom, '') + ['slug' => '', 'status' => 'segera_terbit', 'harga_cetak' => 0, 'harga_ebook' => 0, 'sampul' => '', 'tampil' => 1, 'bahasa' => 'Indonesia', 'tahun' => date('Y'), 'format' => 'cetak', 'ebook_path' => '', 'cuplikan_path' => ''];
+
+	if ($post) {
+		foreach ($kolom as $k) {
+			$v[$k] = $k === 'penulis' || $k === 'deskripsi' ? trim(preg_replace("/\r\n?/", "\n", input($k))) : input($k);
+		}
+		$v['status'] = input('status') === 'terbit' ? 'terbit' : 'segera_terbit';
+		$v['harga_cetak'] = (int) preg_replace('/\D/', '', input('harga_cetak'));
+		$v['harga_ebook'] = (int) preg_replace('/\D/', '', input('harga_ebook'));
+		$v['tampil'] = empty($_POST['tampil']) ? 0 : 1;
+		$v['format'] = isset(FORMAT_BUKU[$v['format']]) ? $v['format'] : 'cetak';
+		foreach (['serah_cetak', 'serah_digital'] as $k) {
+			$v[$k] = preg_match('/^\d{4}-\d{2}-\d{2}$/', $v[$k]) ? $v[$k] : '';
+		}
+		try {
+			if (mb_strlen($v['judul']) < 2) {
+				throw new RuntimeException('Isi judul buku.');
+			}
+			if (!ada_ebook($v) && $v['harga_ebook'] > 0) {
+				throw new RuntimeException('Harga e-book diisi, tetapi format buku "Cetak". Ubah format menjadi "E-book" atau "Cetak & E-book", atau kosongkan harga e-book.');
+			}
+			if (!ada_cetak($v) && $v['harga_cetak'] > 0) {
+				throw new RuntimeException('Harga cetak diisi, tetapi format buku "E-book". Ubah format menjadi "Cetak & E-book", atau kosongkan harga cetak.');
+			}
+			if (!ada_cetak($v) && $v['isbn'] !== '') {
+				throw new RuntimeException('Buku khusus e-book hanya memakai e-ISBN. Pindahkan nomornya ke kolom e-ISBN.');
+			}
+			$sampul = unggah_sampul_katalog('sampul');
+			if ($sampul !== '') {
+				$v['sampul'] = $sampul;
+			}
+			if ($b) {
+				q('UPDATE buku SET judul=?, subjudul=?, penulis=?, editor=?, kategori=?, tahun=?, isbn=?, eisbn=?, edisi=?, halaman=?, ukuran=?, bahasa=?, deskripsi=?, format=?, serah_cetak=?, serah_digital=?, status=?, harga_cetak=?, harga_ebook=?, sampul=?, tampil=? WHERE id=?',
+					[...array_map(fn ($k) => $v[$k], $kolom), $v['status'], $v['harga_cetak'], $v['harga_ebook'], $v['sampul'], $v['tampil'], $b['id']]);
+				$bid = (int) $b['id'];
+			} else {
+				$slug = slug_unik(input('slug') !== '' ? input('slug') : $v['judul']);
+				q('INSERT INTO buku (judul, subjudul, penulis, editor, kategori, tahun, isbn, eisbn, edisi, halaman, ukuran, bahasa, deskripsi, format, serah_cetak, serah_digital, status, harga_cetak, harga_ebook, sampul, tampil, slug, dibuat) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+					[...array_map(fn ($k) => $v[$k], $kolom), $v['status'], $v['harga_cetak'], $v['harga_ebook'], $v['sampul'], $v['tampil'], $slug, sekarang()]);
+				$bid = (int) db()->lastInsertId();
+			}
+			simpan_ebook($bid);
+			if (!empty($_POST['hapus_cuplikan'])) {
+				q("UPDATE buku SET cuplikan_path = '' WHERE id = ?", [$bid]);
+			}
+			simpan_cuplikan($bid);
+			pesan('Data buku tersimpan.');
+			arahkan('/admin/buku/' . $bid);
+		} catch (RuntimeException $ex) {
+			pesan($ex->getMessage(), 'galat');
+		}
+	}
+
+	$f = fn (string $k, string $label, string $extra = '') => '<div><label for="' . $k . '">' . $label . '</label><input id="' . $k . '" name="' . $k . '" value="' . e((string) $v[$k]) . '"' . $extra . '></div>';
+	$isi = '<section class="panel"><p><a href="' . e(url('/admin/buku')) . '">← Katalog</a></p>
+	<h1>' . ($b ? 'Ubah Buku' : 'Tambah Buku') . '</h1>
+	' . ($b ? '<p>Link: <a href="' . e(url(buku_url($b))) . '" target="_blank">' . e(url_absolut(buku_url($b))) . '</a></p>' : '') . '
+	<form method="post" enctype="multipart/form-data" class="formulir formulir--lebar">' . csrf_field() . '
+		<div class="kolom-2">
+			' . $f('judul', 'Judul *', ' required') . $f('subjudul', 'Subjudul') . '
+			' . ($b ? '' : $f('slug', 'Link (kosongkan agar dibuat dari judul)', ' pattern="[a-z0-9-]*"')) . '
+			' . $f('editor', 'Editor') . $f('kategori', 'Kategori') . $f('tahun', 'Tahun terbit') . '
+			<div><label for="status">Status</label><select id="status" name="status"><option value="segera_terbit"' . ($v['status'] === 'segera_terbit' ? ' selected' : '') . '>Segera Terbit (belum bisa dipesan)</option><option value="terbit"' . ($v['status'] === 'terbit' ? ' selected' : '') . '>Sudah Terbit</option></select></div>
+			<div><label for="format">Format terbit</label><select id="format" name="format">' . implode('', array_map(fn ($k) => '<option value="' . $k . '"' . ($v['format'] === $k ? ' selected' : '') . '>' . e(FORMAT_BUKU[$k]) . '</option>', array_keys(FORMAT_BUKU))) . '</select></div>
+			' . $f('isbn', 'ISBN buku cetak') . $f('eisbn', 'e-ISBN (ISBN e-book)') . $f('edisi', 'Edisi') . $f('halaman', 'Jumlah halaman') . $f('ukuran', 'Ukuran') . $f('bahasa', 'Bahasa') . '
+			' . $f('harga_cetak', 'Harga cetak (Rp, 0 = tidak dijual)', ' inputmode="numeric" data-rupiah') . $f('harga_ebook', 'Harga e-book (Rp, 0 = tidak dijual)', ' inputmode="numeric" data-rupiah') . '
+		</div>
+		<label for="penulis">Penulis (satu nama per baris)</label><textarea id="penulis" name="penulis" rows="3">' . e($v['penulis']) . '</textarea>
+		<label for="deskripsi">Deskripsi (pisahkan paragraf dengan baris kosong)</label><textarea id="deskripsi" name="deskripsi" rows="8">' . e((string) $v['deskripsi']) . '</textarea>
+		<label for="sampul">Sampul ' . ($v['sampul'] ? '(sudah ada, unggah untuk mengganti)' : '') . '</label>
+		' . ($v['sampul'] ? '<img class="pratinjau-sampul" src="' . e(url($v['sampul'])) . '" alt="Sampul saat ini">' : '') . '
+		<input type="file" id="sampul" name="sampul" accept=".jpg,.jpeg,.png,.webp">
+		<label for="ebook">File e-book (PDF, maks. 30 MB) ' . (($b['ebook_path'] ?? '') !== '' ? '<span class="catatan">(sudah ada: ' . e(basename((string) $b['ebook_path'])) . ', unggah untuk mengganti)</span>' : '<span class="catatan">(wajib bila e-book dijual)</span>') . '</label>
+		<input type="file" id="ebook" name="ebook" accept=".pdf">
+		<p class="catatan">File e-book tidak bisa dibuka publik. Pembeli hanya mendapat link unduhan pribadi yang berlaku ' . EBOOK_HARI . ' hari setelah pembayarannya diterima.</p>
+		<label for="cuplikan">Cuplikan (PDF, maks. 10 MB) ' . (($v['cuplikan_path'] ?? '') !== '' ? '<span class="catatan">(sudah ada, <a href="' . e(url(buku_url($v) . 'cuplikan')) . '" target="_blank">lihat</a>; unggah untuk mengganti)</span>' : '<span class="catatan">(opsional)</span>') . '</label>
+		<input type="file" id="cuplikan" name="cuplikan" accept=".pdf">
+		<p class="catatan">Cuplikan bisa dibaca siapa saja lewat tombol "Baca cuplikan" di halaman buku. Isi dengan sampul, daftar isi, dan beberapa halaman awal saja, bukan seluruh buku.</p>
+		' . (($v['cuplikan_path'] ?? '') !== '' ? '<label class="centang"><input type="checkbox" name="hapus_cuplikan" value="1"> Hapus cuplikan</label>' : '') . '
+		<fieldset class="serah">
+			<legend>Wajib serah simpan ke Perpusnas (catatan admin, tidak tampil di website)</legend>
+			<div class="kolom-2">
+				<div><label for="serah_cetak">Tanggal serah buku cetak</label><input type="date" id="serah_cetak" name="serah_cetak" value="' . e((string) $v['serah_cetak']) . '"><p class="catatan">2 eks ke Perpusnas dan 1 eks ke Perpusda.</p></div>
+				<div><label for="serah_digital">Tanggal serah e-book (karya elektronik)</label><input type="date" id="serah_digital" name="serah_digital" value="' . e((string) $v['serah_digital']) . '"><p class="catatan">File PDF e-book ke Perpusnas.</p></div>
+			</div>
+			<p class="catatan">Kosongkan bila belum diserahkan. Buku yang sudah terbit tetapi belum dicatat akan muncul di Dasbor Admin.</p>
+		</fieldset>
+		<label class="centang"><input type="checkbox" id="tampil" name="tampil" value="1"' . ($v['tampil'] ? ' checked' : '') . '> Tampilkan di katalog</label>
+		<div class="formulir__tombol"><button type="submit" class="tombol">Simpan</button></div>
+	</form></section>';
+	tampil($b ? 'Ubah Buku' : 'Tambah Buku', $isi, ['panel' => menu_admin('/admin/buku')]);
+}
+
+function admin_pengguna(bool $post): void
+{
+	$admin = wajib_masuk('admin');
+	if ($post && ($_POST['aksi'] ?? '') === 'tambah') {
+		$email = mb_strtolower(input('email'));
+		$sandi = (string) ($_POST['sandi'] ?? '');
+		$peran = isset(PERAN[input('peran')]) ? input('peran') : 'keuangan';
+		if (mb_strlen(input('nama')) < 3 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+			pesan('Isi nama dan email yang benar.', 'galat');
+		} elseif (strlen($sandi) < 8) {
+			pesan('Kata sandi minimal 8 karakter.', 'galat');
+		} elseif (satu('SELECT id FROM pengguna WHERE email = ?', [$email])) {
+			pesan('Email ini sudah terdaftar. Ubah perannya di tabel di bawah.', 'galat');
+		} else {
+			q('INSERT INTO pengguna (nama, email, whatsapp, sandi, peran, dibuat) VALUES (?, ?, ?, ?, ?, ?)', [input('nama'), $email, preg_replace('/[^0-9+]/', '', input('whatsapp')), password_hash($sandi, PASSWORD_DEFAULT), $peran, sekarang()]);
+			pesan('Akun ' . PERAN[$peran] . ' untuk ' . input('nama') . ' dibuat. Berikan email dan kata sandinya; pengguna bisa menggantinya di menu Profil.');
+		}
+		arahkan('/admin/pengguna');
+	}
+	if ($post) {
+		$uid = (int) input('uid');
+		$target = satu('SELECT * FROM pengguna WHERE id = ?', [$uid]);
+		if ($target) {
+			if (($_POST['aksi'] ?? '') === 'peran' && $uid !== (int) $admin['id']) {
+				q('UPDATE pengguna SET peran = ? WHERE id = ?', [isset(PERAN[input('peran')]) ? input('peran') : 'pengaju', $uid]);
+				pesan('Peran ' . $target['nama'] . ' diperbarui.');
+			} elseif (($_POST['aksi'] ?? '') === 'sandi') {
+				$baru = (string) ($_POST['sandi'] ?? '');
+				if (strlen($baru) < 8) {
+					pesan('Kata sandi minimal 8 karakter.', 'galat');
+				} else {
+					q('UPDATE pengguna SET sandi = ? WHERE id = ?', [password_hash($baru, PASSWORD_DEFAULT), $uid]);
+					pesan('Kata sandi ' . $target['nama'] . ' diganti. Beri tahu pengguna lewat WhatsApp.');
+				}
+			}
+		}
+		arahkan('/admin/pengguna');
+	}
+	$baris = '';
+	foreach (semua('SELECT u.*, (SELECT COUNT(*) FROM pengajuan p WHERE p.pengguna_id = u.id) AS jml FROM pengguna u ORDER BY u.dibuat DESC') as $r) {
+		$diri = (int) $r['id'] === (int) $admin['id'];
+		$rid = (int) $r['id'];
+		$peran = $diri ? '<span class="catatan">Admin (Anda)</span>'
+			: '<form method="post" class="peran-form">' . csrf_field() . '<input type="hidden" name="aksi" value="peran"><input type="hidden" name="uid" value="' . $rid . '"><label class="tersembunyi" for="peran-' . $rid . '">Peran</label><select id="peran-' . $rid . '" name="peran" onchange="this.form.querySelector(\'button\').hidden=false">' . implode('', array_map(fn ($k, $l) => '<option value="' . $k . '"' . ($r['peran'] === $k ? ' selected' : '') . '>' . e($k === 'pengaju' ? 'Penulis' : $l) . '</option>', array_keys(PERAN), PERAN)) . '</select><button class="ikon-tombol ikon-tombol--utama" type="submit" title="Simpan peran" aria-label="Simpan peran" hidden>' . ikon('centang') . '</button></form>';
+		$aksi = '<a class="ikon-tombol" href="' . e(url('/admin/pengguna/' . $rid)) . '" title="Lihat akun" aria-label="Lihat akun ' . e($r['nama']) . '">' . ikon('lihat') . '</a>'
+			. ($r['peran'] !== 'admin' ? form_masuk_sebagai($r, 'Masuk sebagai ' . $r['nama'], 'ikon-tombol', ikon('masuk')) : '')
+			. '<details class="ikon-lipat"><summary class="ikon-tombol" title="Atur ulang sandi" aria-label="Atur ulang sandi ' . e($r['nama']) . '">' . ikon('kunci') . '</summary><form method="post" class="baris-form">' . csrf_field() . '<input type="hidden" name="aksi" value="sandi"><input type="hidden" name="uid" value="' . $rid . '"><label class="tersembunyi" for="sandi-' . $rid . '">Sandi baru</label><input type="text" id="sandi-' . $rid . '" name="sandi" minlength="8" placeholder="Sandi baru (min. 8)" required><button class="tombol tombol--kecil" type="submit">Ganti</button></form></details>';
+		$baris .= '<tr><td><a href="' . e(url('/admin/pengguna/' . $rid)) . '"><strong>' . e($r['nama']) . '</strong></a><br><span class="catatan">' . e($r['email']) . ($r['whatsapp'] !== '' ? ' · ' . e($r['whatsapp']) : '') . '</span></td>'
+			. '<td class="angka">' . (int) $r['jml'] . '</td><td>' . $peran . '</td><td><div class="aksi-ikon">' . $aksi . '</div></td></tr>';
+	}
+	$isi = '<section class="panel"><h1>Pengguna</h1>
+	<details class="kotak-langkah"><summary>Tambah akun (penulis / keuangan / admin)</summary>
+		<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="tambah">
+			<div class="kolom-2">
+				<div><label for="t-nama">Nama</label><input id="t-nama" name="nama" required></div>
+				<div><label for="t-email">Email (untuk masuk)</label><input type="email" id="t-email" name="email" required></div>
+				<div><label for="t-wa">Nomor WhatsApp</label><input id="t-wa" name="whatsapp" inputmode="tel"></div>
+				<div><label for="t-sandi">Kata sandi awal (min. 8 karakter)</label><input type="text" id="t-sandi" name="sandi" minlength="8" required></div>
+				<div><label for="t-peran">Peran</label><select id="t-peran" name="peran"><option value="pengaju">Penulis: ajukan naskah dan pantau statusnya</option><option value="keuangan">Keuangan: lihat &amp; unduh data transaksi</option><option value="admin">Admin: akses penuh</option></select></div>
+			</div>
+			<button type="submit" class="tombol">Buat Akun</button>
+		</form>
+	</details>
+	<div class="tabel-wadah"><table class="tabel tabel-pengguna"><thead><tr><th>Nama</th><th>Pengajuan</th><th>Peran</th><th>Aksi</th></tr></thead><tbody>' . $baris . '</tbody></table></div>
+	<p class="catatan keterangan-ikon">' . ikon('lihat') . ' Lihat akun &nbsp; ' . ikon('masuk') . ' Masuk sebagai pengguna &nbsp; ' . ikon('kunci') . ' Atur ulang sandi</p></section>';
+	tampil('Pengguna', $isi, ['panel' => menu_admin('/admin/pengguna')]);
+}
+
+/** Tombol "Masuk sebagai" (hanya untuk akun penulis dan keuangan). */
+function form_masuk_sebagai(array $r, string $label = 'Masuk sebagai', string $kelas = 'tombol tombol--kecil', string $ikon = ''): string
+{
+	return '<form method="post" action="' . e(url('/admin/pengguna/' . $r['id'] . '/masuk')) . '">' . csrf_field()
+		. '<button type="submit" class="' . $kelas . '" title="' . ($ikon !== '' ? 'Masuk sebagai pengguna ini' : 'Buka panel ' . e($r['nama']) . ' seperti yang ia lihat') . '"' . ($ikon !== '' ? ' aria-label="' . e($label) . '">' . $ikon : '>' . e($label)) . '</button></form>';
+}
+
+/** Detail satu akun: profil, pengajuan buku, HKI, pesanan, dan catatan "masuk sebagai". */
+function admin_pengguna_detail(bool $post, string $id): void
+{
+	$admin = wajib_masuk('admin');
+	$u = satu('SELECT * FROM pengguna WHERE id = ?', [(int) $id]);
+	if (!$u) {
+		tidak_ditemukan();
+	}
+	$uid = (int) $u['id'];
+
+	$buku = semua('SELECT p.*, u.nama FROM pengajuan p JOIN pengguna u ON u.id = p.pengguna_id WHERE p.pengguna_id = ? ORDER BY p.diubah DESC', [$uid]);
+
+	$hki = '';
+	foreach (semua('SELECT * FROM hki WHERE pengguna_id = ? ORDER BY diubah DESC', [$uid]) as $h) {
+		$hki .= '<tr><td><a href="' . e(url('/admin/hki/' . $h['id'])) . '"><strong>' . e($h['judul']) . '</strong></a><br><span class="catatan">' . e(no_hki($h)) . '</span></td><td>' . label_hki($h['status']) . '</td><td class="angka">' . e(tanggal($h['diubah'])) . '</td></tr>';
+	}
+
+	$pesanan = '';
+	foreach (semua('SELECT o.*, b.judul FROM pesanan o JOIN buku b ON b.id = o.buku_id WHERE o.pengguna_id = ? OR o.email = ? ORDER BY o.dibuat DESC', [$uid, $u['email']]) as $o) {
+		$pesanan .= '<tr><td><a href="' . e(url('/admin/pesanan/' . $o['id'])) . '"><strong>' . e($o['kode']) . '</strong></a><br><span class="catatan">' . e($o['judul']) . ' · ' . (int) $o['jumlah'] . ' ' . ($o['format'] === 'ebook' ? 'e-book' : 'eks') . '</span></td><td>' . label_pesanan($o['status']) . '</td><td class="angka">' . rupiah((int) $o['total']) . '</td></tr>';
+	}
+
+	$jejak = '';
+	try {
+		foreach (semua('SELECT j.*, a.nama AS admin FROM jejak_admin j LEFT JOIN pengguna a ON a.id = j.admin_id WHERE j.pengguna_id = ? ORDER BY j.id DESC LIMIT 10', [$uid]) as $j) {
+			$jejak .= '<li>' . e(tanggal($j['dibuat'])) . ' · ' . e($j['admin'] ?? 'Admin') . ' ' . ($j['aksi'] === 'masuk' ? 'masuk sebagai akun ini' : 'kembali ke akun admin') . '</li>';
+		}
+	} catch (Throwable) {
+	}
+
+	$tabel = fn (string $baris, string $kepala, string $kosong) => $baris !== ''
+		? '<div class="tabel-wadah"><table class="tabel"><thead><tr>' . $kepala . '</tr></thead><tbody>' . $baris . '</tbody></table></div>'
+		: '<p class="catatan">' . $kosong . '</p>';
+
+	$diri = $uid === (int) $admin['id'];
+	$isi = '<section class="panel">
+	<p class="catatan"><a href="' . e(url('/admin/pengguna')) . '">← Semua pengguna</a></p>
+	<div class="judul-aksi"><h1>' . e($u['nama']) . '</h1>'
+		. ($u['peran'] !== 'admin' ? form_masuk_sebagai($u, 'Masuk sebagai ' . (PERAN[$u['peran']] === 'Keuangan' ? 'keuangan' : 'penulis') . ' ini') : '') . '</div>
+	<dl class="data-ringkas">
+		<div><dt>Peran</dt><dd>' . e(PERAN[$u['peran']] ?? $u['peran']) . ($diri ? ' (Anda)' : '') . '</dd></div>
+		<div><dt>Email</dt><dd><a href="mailto:' . e($u['email']) . '">' . e($u['email']) . '</a></dd></div>
+		<div><dt>WhatsApp</dt><dd>' . ($u['whatsapp'] !== '' ? '<a href="https://wa.me/' . e(preg_replace('/^0/', '62', ltrim($u['whatsapp'], '+'))) . '">' . e($u['whatsapp']) . '</a>' : '-') . '</dd></div>
+		<div><dt>Terdaftar</dt><dd>' . e(tanggal($u['dibuat'])) . '</dd></div>
+	</dl>
+	' . ($u['peran'] !== 'admin' ? '<p class="catatan">"Masuk sebagai" membuka panel akun ini persis seperti yang dilihat pemiliknya, tanpa perlu kata sandinya. Tekan <strong>Kembali ke admin</strong> di pita atas untuk kembali. Setiap kali masuk dicatat di bawah.</p>' : '') . '
+	<h2>Pengajuan buku (' . count($buku) . ')</h2>
+	' . ($buku ? tabel_pengajuan($buku) : '<p class="catatan">Belum ada pengajuan buku.</p>') . '
+	<h2>Pengajuan HKI</h2>
+	' . $tabel($hki, '<th>Judul</th><th>Status</th><th>Diperbarui</th>', 'Belum ada pengajuan HKI.') . '
+	<h2>Pesanan buku</h2>
+	' . $tabel($pesanan, '<th>Pesanan</th><th>Status</th><th>Total</th>', 'Belum ada pesanan buku.') . '
+	' . ($jejak !== '' ? '<h2>Catatan masuk sebagai</h2><ul class="daftar-jejak">' . $jejak . '</ul>' : '') . '
+</section>';
+	tampil($u['nama'], $isi, ['panel' => menu_admin('/admin/pengguna')]);
+}
+
+/** Admin membuka sesi sebagai penulis/keuangan. Akun admin lain tidak bisa dimasuki. */
+function admin_masuk_sebagai(bool $post, string $id): void
+{
+	$admin = wajib_masuk('admin');
+	$u = satu('SELECT * FROM pengguna WHERE id = ?', [(int) $id]);
+	if (!$post || !$u) {
+		arahkan('/admin/pengguna' . ($u ? '/' . $u['id'] : ''));
+	}
+	if ($u['peran'] === 'admin') {
+		pesan('Akun admin tidak bisa dimasuki dengan "Masuk sebagai".', 'galat');
+		arahkan('/admin/pengguna/' . $u['id']);
+	}
+	catat_jejak_admin((int) $admin['id'], (int) $u['id'], 'masuk');
+	session_regenerate_id(true);
+	$_SESSION['admin_asal'] = (int) $admin['id'];
+	$_SESSION['uid'] = (int) $u['id'];
+	pesan('Anda sekarang melihat panel sebagai ' . $u['nama'] . '.', 'info');
+	arahkan(beranda_peran($u['peran']));
+}
+
+/** Akhiri "masuk sebagai" dan kembali ke akun admin asal. */
+function kembali_ke_admin(bool $post): void
+{
+	if (!$post || empty($_SESSION['admin_asal'])) {
+		arahkan(pengguna() ? beranda_peran(pengguna()['peran']) : '/');
+	}
+	$admin = admin_asal();
+	$uid = (int) ($_SESSION['uid'] ?? 0);
+	unset($_SESSION['admin_asal']);
+	session_regenerate_id(true);
+	if (!$admin) {
+		$_SESSION = [];
+		session_destroy();
+		arahkan('/masuk');
+	}
+	catat_jejak_admin((int) $admin['id'], $uid, 'kembali');
+	$_SESSION['uid'] = (int) $admin['id'];
+	pesan('Anda kembali ke akun admin.');
+	arahkan('/admin/pengguna/' . $uid);
+}
+
+const TAB_PENGATURAN = [
+	'harga'     => ['Harga & Paket', 'harga'],
+	'hki'       => ['HKI', 'hki'],
+	'waktu'     => ['Waktu Kerja', 'tahun'],
+	'layanan'   => ['Layanan Publik', 'halaman'],
+	'identitas' => ['Identitas Situs', 'penerbit'],
+	'qris'      => ['QRIS', 'uang'],
+	'email'     => ['Email', 'surat'],
+];
+
+function admin_pengaturan(bool $post): void
+{
+	global $SITUS;
+	$admin = wajib_masuk('admin');
+	if ($post && input('aksi') === 'email') {
+		simpan_pengaturan_email($admin);
+		arahkan('/admin/pengaturan?tab=email');
+	}
+	$tab = isset(TAB_PENGATURAN[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'harga';
+	if ($post) {
+		$tab = isset(TAB_PENGATURAN[input('tab')]) ? input('tab') : 'harga';
+		$uang = fn (string $k) => (int) preg_replace('/\D/', '', input($k));
+		try {
+			if ($tab === 'harga') {
+				if ($uang('biaya_awal') < 1) {
+					throw new RuntimeException('Isi biaya awal.');
+				}
+				simpan_pengaturan('biaya_awal', (string) $uang('biaya_awal'));
+				foreach (PAKET as [, , , $kunci]) {
+					if ($uang($kunci) > 0) {
+						simpan_pengaturan($kunci, (string) $uang($kunci));
+					}
+				}
+				simpan_pengaturan('batas_halaman_paket', (string) max(1, (int) input('batas_halaman_paket', '200')));
+				simpan_pengaturan('margin_cetak', (string) max(0, min(500, (int) input('margin_cetak', '30'))));
+			} elseif ($tab === 'hki') {
+				foreach (['harga_hki', 'harga_hki_penulis'] as $k) {
+					if ($uang($k) > 0) {
+						simpan_pengaturan($k, (string) $uang($k));
+					}
+				}
+			} elseif ($tab === 'waktu') {
+				foreach (['buku' => WAKTU_TAHAP_BUKU, 'hki' => array_column(TAHAP_HKI, 2)] as $jenis => $bawaan) {
+					foreach (array_keys($bawaan) as $i) {
+						if (isset($_POST['waktu_' . $jenis . '_' . $i])) {
+							simpan_pengaturan('waktu_' . $jenis . '_' . $i, trim(mb_substr(input('waktu_' . $jenis . '_' . $i), 0, 40)));
+						}
+					}
+				}
+			} elseif ($tab === 'layanan') {
+				foreach (array_keys(LAYANAN_PUBLIK) as $jenis) {
+					simpan_pengaturan('tampil_layanan_' . $jenis, empty($_POST['tampil_layanan_' . $jenis]) ? '0' : '1');
+				}
+			} elseif ($tab === 'identitas') {
+				foreach (array_keys(IDENTITAS) as $k) {
+					if (!isset($_POST['situs_' . $k])) {
+						continue;
+					}
+					$v = trim(mb_substr(input('situs_' . $k), 0, 500));
+					if ($k === 'email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) {
+						throw new RuntimeException('Alamat email tidak valid.');
+					}
+					simpan_pengaturan('situs_' . $k, $v);
+				}
+			} elseif ($tab === 'qris') {
+				$qris = unggah_sampul_katalog('qris');
+				if ($qris === '') {
+					throw new RuntimeException('Pilih gambar QRIS yang baru terlebih dahulu.');
+				}
+				simpan_pengaturan('qris_gambar', $qris);
+			}
+			pesan(TAB_PENGATURAN[$tab][0] . ' tersimpan.');
+		} catch (RuntimeException $ex) {
+			pesan($ex->getMessage(), 'galat');
+		}
+		arahkan('/admin/pengaturan?tab=' . $tab);
+	}
+
+	$kartu = fn (string $judul, string $isi, string $catatan = '') => '<div class="kartu-atur"><h3>' . $judul . '</h3>' . $isi . ($catatan !== '' ? '<p class="catatan">' . $catatan . '</p>' : '') . '</div>';
+	$uang_isian = fn (string $id, int $nilai) => '<input id="' . $id . '" name="' . $id . '" inputmode="numeric" data-rupiah value="' . e((string) $nilai) . '">';
+
+	$bagian = match ($tab) {
+		'harga' => '<div class="kisi-atur">'
+			. $kartu('<label for="biaya_awal">Biaya awal pengajuan</label>', $uang_isian('biaya_awal', (int) pengaturan('biaya_awal', '250000')), 'Uang muka, dipotong dari harga paket saat pelunasan.')
+			. implode('', array_map(fn ($pk) => $kartu('<label for="' . $pk[3] . '">' . e($pk[0]) . '</label>', $uang_isian($pk[3], (int) pengaturan($pk[3], (string) $pk[4])), e($pk[5])), PAKET))
+			. '</div><div class="kisi-atur">'
+			. $kartu('<label for="batas_halaman_paket">Batas halaman standar</label>', '<input id="batas_halaman_paket" name="batas_halaman_paket" type="number" min="1" value="' . e((string) batas_halaman_paket()) . '">', 'Buku A5, HVS hitam putih, soft cover. Lebih tebal = ada selisih cetak.')
+			. $kartu('<label for="margin_cetak">Margin harga cetak (%)</label>', '<input id="margin_cetak" name="margin_cetak" type="number" min="0" max="500" value="' . e((string) margin_cetak()) . '">', 'Harga cetak per buku = taksiran <a href="' . e(url('/admin/harga')) . '">Harga Cetak</a> + margin.')
+			. '</div>',
+		'hki' => '<div class="kisi-atur">'
+			. $kartu('<label for="harga_hki">Harga umum</label>', $uang_isian('harga_hki', harga_hki()), 'Untuk pemohon yang belum menerbitkan buku di sini.')
+			. $kartu('<label for="harga_hki_penulis">Harga khusus</label>', $uang_isian('harga_hki_penulis', harga_hki_penulis()), 'Otomatis untuk penulis yang biaya awalnya sudah diterima, dan pemohon dengan <a href="' . e(url('/admin/hki#kode-khusus')) . '">kode harga khusus</a>.')
+			. '</div><p class="catatan">HKI di Paket Pustaka tetap tanpa biaya tambahan. Biaya satu permohonan bisa diubah dari halaman detail HKI sebelum dibayar.</p>',
+		'waktu' => '<p class="catatan">Tampil di bawah tiap tahap progres pengajuan. Kosongkan bila tidak ingin ditampilkan. Contoh: 1 hari kerja, 7–9 hari kerja.</p><div class="kisi-atur kisi-atur--2">'
+			. $kartu('Penerbitan buku', '<div class="daftar-waktu">' . implode('', array_map(fn ($i, $t) => '<label for="waktu_buku_' . $i . '">' . e($t[0]) . '</label><input id="waktu_buku_' . $i . '" name="waktu_buku_' . $i . '" maxlength="40" value="' . e(waktu_tahap('buku', $i, WAKTU_TAHAP_BUKU[$i])) . '">', array_keys(TAHAP_TAMPIL), TAHAP_TAMPIL)) . '</div>')
+			. $kartu('Layanan HKI', '<div class="daftar-waktu">' . implode('', array_map(fn ($i, $t) => '<label for="waktu_hki_' . $i . '">' . e($t[0]) . '</label><input id="waktu_hki_' . $i . '" name="waktu_hki_' . $i . '" maxlength="40" value="' . e(waktu_tahap('hki', $i, $t[2])) . '">', array_keys(TAHAP_HKI), TAHAP_HKI)) . '</div>')
+			. '</div>',
+		'layanan' => '<div class="kisi-atur kisi-atur--2">'
+			. implode('', array_map(fn ($jenis, $d) => '<label class="kartu-atur kartu-saklar"><input type="checkbox" name="tampil_layanan_' . $jenis . '" value="1"' . (layanan_tampil($jenis) ? ' checked' : '') . '><span><strong>Tampilkan</strong><br><span class="catatan">' . e($d[0]) . '</span></span></label>', array_keys(LAYANAN_PUBLIK), LAYANAN_PUBLIK))
+			. '</div><p class="pesan pesan--info">Perpusnas melarang website penerbit mempromosikan jasa pencantuman ISBN, jadi halaman ini sebaiknya tetap disembunyikan. Panel penulis, admin, dan keuangan tetap berjalan. Selama semuanya disembunyikan, pendaftaran akun mandiri ditutup; buat akun penulis di menu <a href="' . e(url('/admin/pengguna')) . '">Pengguna</a>.</p>',
+		'identitas' => '<div class="kisi-atur kisi-atur--2">'
+			. implode('', array_map(fn ($k, $d) => '<div class="isian-atur' . ($d[1] === 'textarea' ? ' isian-atur--lebar' : '') . '"><label for="situs_' . $k . '">' . e($d[0]) . '</label>' . ($d[1] === 'textarea'
+				? '<textarea id="situs_' . $k . '" name="situs_' . $k . '" rows="2">' . e($SITUS[$k]) . '</textarea>'
+				: '<input id="situs_' . $k . '" name="situs_' . $k . '" value="' . e($SITUS[$k]) . '"' . ($k === 'email' ? ' type="email"' : '') . '>') . '</div>', array_keys(IDENTITAS), IDENTITAS))
+			. '</div><p class="catatan">Isi halaman Tentang Kami, Kontak, dan lainnya diubah di menu <a href="' . e(url('/admin/halaman')) . '">Halaman Website</a>.</p>',
+		'qris' => '<div class="kisi-atur kisi-atur--2"><div class="kartu-atur"><h3>QRIS saat ini</h3>' . blok_qris() . '</div>'
+			. $kartu('<label for="qris">Ganti gambar QRIS</label>', '<input type="file" id="qris" name="qris" accept=".jpg,.jpeg,.png,.webp" required>', 'JPG, PNG, atau WebP. Gambar lama langsung diganti setelah disimpan.') . '</div>',
+		default => '',
+	};
+
+	$tabs = '';
+	foreach (TAB_PENGATURAN as $k => [$label, $ik]) {
+		$tabs .= '<a href="' . e(url('/admin/pengaturan?tab=' . $k)) . '"' . ($k === $tab ? ' aria-current="page"' : '') . '>' . ikon($ik) . '<span>' . e($label) . '</span></a>';
+	}
+	$ringkas = '<div class="ringkas-atur">'
+		. '<a href="' . e(url('/admin/pengaturan?tab=harga')) . '"><span>Biaya awal</span><strong>' . rupiah((int) pengaturan('biaya_awal', '250000')) . '</strong></a>'
+		. '<a href="' . e(url('/admin/pengaturan?tab=hki')) . '"><span>HKI umum / khusus</span><strong>' . rupiah(harga_hki()) . ' / ' . rupiah(harga_hki_penulis()) . '</strong></a>'
+		. '<a href="' . e(url('/admin/pengaturan?tab=email')) . '"><span>Email</span><strong class="' . (smtp_siap() ? 'ok' : 'awas') . '">' . (smtp_siap() ? 'Siap terkirim' : 'Belum diatur') . '</strong></a>'
+		. '</div>';
+
+	$isi = '<section class="panel panel-atur"><h1>Pengaturan</h1>' . $ringkas . '
+	<nav class="tab-atur" aria-label="Bagian pengaturan">' . $tabs . '</nav>
+	<div class="isi-atur">'
+		. ($tab === 'email' ? form_pengaturan_email($admin)
+			: '<form method="post" enctype="multipart/form-data" class="formulir formulir-atur" data-ubah>' . csrf_field() . '<input type="hidden" name="tab" value="' . e($tab) . '">' . $bagian
+				. '<div class="bilah-simpan"><span>Ada perubahan yang belum disimpan.</span><button type="submit" class="tombol tombol--kecil">Simpan</button></div></form>')
+	. '</div></section>
+	<script>document.querySelectorAll("form[data-ubah]").forEach(function(f){var t=function(){f.classList.add("berubah")};f.addEventListener("input",t);f.addEventListener("change",t);});</script>';
+	tampil('Pengaturan', $isi, ['panel' => menu_admin('/admin/pengaturan')]);
+}
+
+/** Kode harga seperti di daftar harga Excel, mis. A5_HVS_HITAM PUTIH_2SISI_80gr. */
+function kode_kertas(array $r): string
+{
+	return $r['ukuran'] . '_' . ($r['kertas'] === 'hvs' ? 'HVS' : 'BP') . '_' . ($r['warna'] === 'warna' ? 'WARNA' : 'HITAM PUTIH') . '_' . $r['sisi'] . 'SISI_' . (int) $r['gramasi'] . 'gr';
+}
+
+function kode_cover(array $r): string
+{
+	return label_cetak('jenis_sampul', $r['sampul']) . ' ' . $r['ukuran'] . '_' . ucfirst($r['jilid']) . '_' . label_cetak('laminasi', $r['laminasi']);
+}
+
+function admin_harga(bool $post): void
+{
+	wajib_masuk('admin');
+	$ukuran = ['A5', 'B5', 'A4'];
+	if ($post) {
+		$aksi = $_POST['aksi'] ?? '';
+		$uang = fn ($v) => (int) preg_replace('/\D/', '', (string) $v);
+		try {
+			if ($aksi === 'cara_hitung') {
+				simpan_pengaturan('harga_kertas_per', input('harga_kertas_per') === 'halaman' ? 'halaman' : 'lembar');
+				pesan('Cara menghitung harga kertas disimpan.');
+			} elseif ($aksi === 'simpan_kertas' || $aksi === 'simpan_cover') {
+				$tabel = $aksi === 'simpan_kertas' ? 'harga_kertas' : 'harga_cover';
+				$hapus = array_map('intval', array_keys((array) ($_POST['hapus'] ?? [])));
+				$n = 0;
+				foreach ((array) ($_POST['harga'] ?? []) as $id => $harga) {
+					$id = (int) $id;
+					if (in_array($id, $hapus, true)) {
+						q("DELETE FROM $tabel WHERE id = ?", [$id]);
+						continue;
+					}
+					if ($tabel === 'harga_kertas') {
+						$g = (int) ($_POST['gramasi'][$id] ?? 0);
+						$n += q('UPDATE harga_kertas SET harga = ?, gramasi = ? WHERE id = ? AND (harga <> ? OR gramasi <> ?)', [$uang($harga), $g, $id, $uang($harga), $g])->rowCount();
+					} else {
+						$n += q('UPDATE harga_cover SET harga = ? WHERE id = ? AND harga <> ?', [$uang($harga), $id, $uang($harga)])->rowCount();
+					}
+				}
+				pesan($n . ' harga diperbarui' . ($hapus ? ', ' . count($hapus) . ' baris dihapus' : '') . '.');
+			} elseif ($aksi === 'tambah_kertas') {
+				$r = [in_array(input('ukuran'), $ukuran, true) ? input('ukuran') : 'A5', input('kertas') === 'bookpaper' ? 'bookpaper' : 'hvs', input('warna') === 'warna' ? 'warna' : 'hitam_putih', input('sisi') === '1' ? '1' : '2', (int) input('gramasi')];
+				$harga = $uang(input('harga'));
+				if ($r[4] < 1 || $harga < 1) {
+					throw new RuntimeException('Isi berat kertas dan harga.');
+				}
+				$ada = satu('SELECT id FROM harga_kertas WHERE ukuran=? AND kertas=? AND warna=? AND sisi=? AND gramasi=?', $r);
+				$ada ? q('UPDATE harga_kertas SET harga = ? WHERE id = ?', [$harga, $ada['id']]) : q('INSERT INTO harga_kertas (ukuran, kertas, warna, sisi, gramasi, harga) VALUES (?,?,?,?,?,?)', [...$r, $harga]);
+				pesan(($ada ? 'Harga diperbarui: ' : 'Harga ditambahkan: ') . kode_kertas(['ukuran' => $r[0], 'kertas' => $r[1], 'warna' => $r[2], 'sisi' => $r[3], 'gramasi' => $r[4]]));
+			} elseif ($aksi === 'tambah_cover') {
+				$r = [in_array(input('ukuran'), $ukuran, true) ? input('ukuran') : 'A5', input('sampul') === 'hard' ? 'hard' : 'soft', isset(PILIHAN_CETAK['jilid'][1][input('jilid')]) ? input('jilid') : 'lem', input('laminasi') === 'glossy' ? 'glossy' : 'doff'];
+				$harga = $uang(input('harga'));
+				if ($harga < 1) {
+					throw new RuntimeException('Isi harga cover.');
+				}
+				$ada = satu('SELECT id FROM harga_cover WHERE ukuran=? AND sampul=? AND jilid=? AND laminasi=?', $r);
+				$ada ? q('UPDATE harga_cover SET harga = ? WHERE id = ?', [$harga, $ada['id']]) : q('INSERT INTO harga_cover (ukuran, sampul, jilid, laminasi, harga) VALUES (?,?,?,?,?)', [...$r, $harga]);
+				pesan(($ada ? 'Harga diperbarui: ' : 'Harga ditambahkan: ') . kode_cover(['ukuran' => $r[0], 'sampul' => $r[1], 'jilid' => $r[2], 'laminasi' => $r[3]]));
+			}
+		} catch (RuntimeException $ex) {
+			pesan($ex->getMessage(), 'galat');
+		}
+		arahkan('/admin/harga' . ($aksi && str_contains($aksi, 'cover') ? '#cover' : '#kertas'));
+	}
+
+	$data = data_harga();
+	$opsi = fn (array $pilihan, string $nama) => '<select name="' . $nama . '">' . implode('', array_map(fn ($v, $l) => '<option value="' . e((string) $v) . '">' . e($l) . '</option>', array_keys($pilihan), $pilihan)) . '</select>';
+	$uk = array_combine($ukuran, $ukuran);
+
+	$baris_kertas = '';
+	$grup = '';
+	foreach ($data['kertas'] as $r) {
+		$g = $r['ukuran'] . ' · ' . label_cetak('warna_isi', $r['warna']);
+		if ($g !== $grup) {
+			$baris_kertas .= '<tr class="tabel-harga__grup"><th colspan="6">' . e($g) . '</th></tr>';
+			$grup = $g;
+		}
+		$id = (int) $r['id'];
+		$baris_kertas .= '<tr><td class="tabel-harga__kode">' . e(kode_kertas($r)) . '</td><td>' . e(label_cetak('jenis_kertas', $r['kertas'])) . '</td><td>' . e($r['sisi']) . ' sisi</td>'
+			. '<td><input class="isian-kecil" name="gramasi[' . $id . ']" inputmode="numeric" value="' . $r['gramasi'] . '" aria-label="Berat kertas ' . e(kode_kertas($r)) . '"> gr</td>'
+			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" data-rupiah value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_kertas($r)) . '"></td>'
+			. '<td><label class="hapus-baris"><input type="checkbox" name="hapus[' . $id . ']" value="1"> Hapus</label></td></tr>';
+	}
+	$baris_cover = '';
+	$grup = '';
+	foreach ($data['cover'] as $r) {
+		if ($r['ukuran'] !== $grup) {
+			$baris_cover .= '<tr class="tabel-harga__grup"><th colspan="4">' . e($r['ukuran']) . '</th></tr>';
+			$grup = $r['ukuran'];
+		}
+		$id = (int) $r['id'];
+		$baris_cover .= '<tr><td class="tabel-harga__kode">' . e(kode_cover($r)) . '</td><td>' . e(label_cetak('jilid', $r['jilid'])) . '</td>'
+			. '<td><input class="isian-harga" name="harga[' . $id . ']" inputmode="numeric" data-rupiah value="' . $r['harga'] . '" aria-label="Harga ' . e(kode_cover($r)) . '"></td>'
+			. '<td><label class="hapus-baris"><input type="checkbox" name="hapus[' . $id . ']" value="1"> Hapus</label></td></tr>';
+	}
+	$f = fn (string $aksi) => '<input type="hidden" name="aksi" value="' . $aksi . '">' . csrf_field();
+	$warna = array_map(fn ($o) => $o[0], PILIHAN_CETAK['warna_isi'][1]);
+	$kertas = array_map(fn ($o) => $o[0], PILIHAN_CETAK['jenis_kertas'][1]);
+	$per = $data['per_lembar'];
+
+	$isi = '<section class="panel"><h1>Harga Cetak</h1>
+	<p class="catatan">Daftar harga ini dipakai untuk menaksir harga cetak per buku di form tagihan pelunasan. Ubah angkanya kapan saja; tagihan yang sudah ditetapkan tidak ikut berubah.</p>
+
+	<form method="post" class="formulir formulir--lebar kotak-cara">' . $f('cara_hitung') . '
+		<fieldset><legend>Cara menghitung harga kertas cetak 2 sisi</legend>
+			<label class="centang"><input type="radio" name="harga_kertas_per" value="lembar"' . ($per ? ' checked' : '') . '> <strong>Per lembar</strong>: jumlah halaman ÷ 2 × harga 2SISI (buku 200 halaman = 100 lembar)</label>
+			<label class="centang"><input type="radio" name="harga_kertas_per" value="halaman"' . ($per ? '' : ' checked') . '> <strong>Per halaman</strong>: jumlah halaman × harga 2SISI</label>
+			<p class="catatan">Cetak 1 sisi selalu dihitung per halaman.</p>
+		</fieldset>
+		<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Simpan cara hitung</button></div>
+	</form>
+
+	<h2 id="kertas">Harga kertas isi (per ' . ($per ? 'lembar' : 'halaman') . ')</h2>
+	<form method="post" class="formulir formulir--lebar">' . $f('simpan_kertas') . '
+		<div class="tabel-wadah"><table class="tabel tabel-harga"><thead><tr><th>Kode</th><th>Kertas</th><th>Sisi</th><th>Berat</th><th>Harga (Rp)</th><th></th></tr></thead><tbody>' . $baris_kertas . '</tbody></table></div>
+		<div class="formulir__tombol"><button class="tombol" type="submit">Simpan harga kertas</button></div>
+	</form>
+	<details class="tambah-harga"><summary>Tambah harga kertas</summary>
+		<form method="post" class="formulir formulir--lebar">' . $f('tambah_kertas') . '<div class="baris-tambah">
+			<label>Ukuran ' . $opsi($uk, 'ukuran') . '</label><label>Kertas ' . $opsi($kertas, 'kertas') . '</label><label>Warna ' . $opsi($warna, 'warna') . '</label><label>Sisi ' . $opsi(['1' => '1 sisi', '2' => '2 sisi'], 'sisi') . '</label>
+			<label>Berat (gr) <input name="gramasi" inputmode="numeric" required></label><label>Harga (Rp) <input name="harga" inputmode="numeric" data-rupiah required></label></div>
+			<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Tambah</button></div><p class="catatan">Jika kombinasinya sudah ada, harganya diperbarui.</p></form>
+	</details>
+
+	<h2 id="cover">Harga cover dan jilid (per buku)</h2>
+	<form method="post" class="formulir formulir--lebar">' . $f('simpan_cover') . '
+		<div class="tabel-wadah"><table class="tabel tabel-harga"><thead><tr><th>Jenis cover</th><th>Jilid</th><th>Harga (Rp)</th><th></th></tr></thead><tbody>' . $baris_cover . '</tbody></table></div>
+		<div class="formulir__tombol"><button class="tombol" type="submit">Simpan harga cover</button></div>
+	</form>
+	<details class="tambah-harga"><summary>Tambah harga cover</summary>
+		<form method="post" class="formulir formulir--lebar">' . $f('tambah_cover') . '<div class="baris-tambah">
+			<label>Ukuran ' . $opsi($uk, 'ukuran') . '</label><label>Cover ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['jenis_sampul'][1]), 'sampul') . '</label><label>Jilid ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['jilid'][1]), 'jilid') . '</label><label>Lapisan ' . $opsi(array_map(fn ($o) => $o[0], PILIHAN_CETAK['laminasi'][1]), 'laminasi') . '</label>
+			<label>Harga (Rp) <input name="harga" inputmode="numeric" data-rupiah required></label></div>
+			<div class="formulir__tombol"><button class="tombol tombol--kedua" type="submit">Tambah</button></div><p class="catatan">Contoh: tambahkan harga untuk jilid staples bila Anda menyediakannya.</p></form>
+	</details>
+	</section>';
+	tampil('Harga Cetak', $isi, ['panel' => menu_admin('/admin/harga')]);
+}
+
+
+// ---------- Halaman website (Tentang Kami, Kontak, dst.) ----------
+
+/** Halaman konten yang bisa diubah admin: slug => judul. */
+function daftar_halaman_konten(): array
+{
+	$out = [];
+	foreach (glob(APP_DIR . '/konten/*.html') ?: [] as $f) {
+		preg_match('/<!--\s*judul:\s*(.+?)\s*-->/', (string) file_get_contents($f), $m);
+		$out[basename($f, '.html')] = $m[1] ?? basename($f, '.html');
+	}
+	return $out;
+}
+
+/** Isi bawaan halaman dari file (tanpa baris judul). */
+function isi_bawaan_halaman(string $slug): string
+{
+	return trim((string) preg_replace('/<!--\s*judul:.*?-->\s*/', '', (string) file_get_contents(APP_DIR . '/konten/' . $slug . '.html')));
+}
+
+/** Bersihkan HTML dari penyunting: hanya tag dan atribut aman yang disimpan. */
+function bersihkan_html(string $html): string
+{
+	$izin = ['p', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'u', 'a', 'br', 'span', 'div', 'blockquote', 'section', 'details', 'summary'];
+	$buang = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'link', 'meta'];
+	// Lindungi {{penanda}} agar tidak di-encode di href.
+	$html = (string) preg_replace('/\{\{(\w+)\}\}/', 'PENANDA__$1__PENANDA', $html);
+	$dok = new DOMDocument();
+	libxml_use_internal_errors(true);
+	$dok->loadHTML('<?xml encoding="utf-8"?><div id="akar">' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+	libxml_clear_errors();
+	$akar = $dok->getElementById('akar');
+	if (!$akar) {
+		return '';
+	}
+	$jalan = function (DOMNode $n) use (&$jalan, $izin, $buang) {
+		foreach (iterator_to_array($n->childNodes) as $c) {
+			if ($c instanceof DOMComment) {
+				$n->removeChild($c);
+				continue;
+			}
+			if (!$c instanceof DOMElement) {
+				continue;
+			}
+			$tag = strtolower($c->tagName);
+			if (in_array($tag, $buang, true)) {
+				$n->removeChild($c);
+				continue;
+			}
+			$jalan($c);
+			if (!in_array($tag, $izin, true)) {
+				while ($c->firstChild) {
+					$n->insertBefore($c->firstChild, $c);
+				}
+				$n->removeChild($c);
+				continue;
+			}
+			foreach (iterator_to_array($c->attributes) as $a) {
+				$nama = strtolower($a->name);
+				$ok = $nama === 'class' || ($tag === 'a' && $nama === 'href' && preg_match('#^(https?://|mailto:|tel:|/|\#|PENANDA__)#i', trim($a->value)));
+				if (!$ok) {
+					$c->removeAttribute($a->name);
+				}
+			}
+			if ($tag === 'a' && preg_match('#^https?://#i', (string) $c->getAttribute('href'))) {
+				$c->setAttribute('rel', 'noopener');
+			}
+		}
+	};
+	$jalan($akar);
+	$out = '';
+	foreach ($akar->childNodes as $c) {
+		$out .= $dok->saveHTML($c);
+	}
+	return trim((string) preg_replace('/PENANDA__(\w+?)__PENANDA/', '{{$1}}', $out));
+}
+
+function admin_halaman(bool $post): void
+{
+	wajib_masuk('admin');
+	$baris = '';
+	foreach (daftar_halaman_konten() as $slug => $judul) {
+		$ubah = pengaturan('konten_' . $slug) !== '';
+		$jenis = jenis_layanan_halaman($slug);
+		$sembunyi = $jenis !== '' && !layanan_tampil($jenis);
+		$baris .= '<tr><td><strong>' . e($judul) . '</strong><br><span class="catatan">/' . e($slug) . '/</span></td><td>' . ($ubah ? '<span class="lencana lencana--proses">Sudah diubah</span>' : '<span class="catatan">Teks bawaan</span>') . ($sembunyi ? ' <span class="lencana lencana--tolak">Disembunyikan</span>' : '') . '</td>'
+			. '<td style="text-align:right;white-space:nowrap"><a class="tombol tombol--kecil" href="' . e(url('/admin/halaman/' . $slug)) . '">Ubah</a> <a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/' . $slug . '/')) . '" target="_blank">Lihat</a></td></tr>';
+	}
+	$isi = '<section class="panel"><h1>Halaman Website</h1>
+	<p>Ubah isi halaman yang tampil di menu dan footer website. Tulisan di bawah logo, alamat, dan kontak di footer diubah di <a href="' . e(url('/admin/pengaturan?tab=identitas')) . '">Pengaturan</a>.</p>
+	<div class="tabel-wadah"><table class="tabel"><thead><tr><th>Halaman</th><th>Status</th><th></th></tr></thead><tbody>' . $baris . '</tbody></table></div></section>';
+	tampil('Halaman Website', $isi, ['panel' => menu_admin('/admin/halaman')]);
+}
+
+function admin_halaman_ubah(bool $post, string $slug): void
+{
+	wajib_masuk('admin');
+	$daftar = daftar_halaman_konten();
+	if (!isset($daftar[$slug])) {
+		tidak_ditemukan();
+	}
+	if ($post) {
+		if (input('aksi') === 'bawaan') {
+			simpan_pengaturan('konten_' . $slug, '');
+			pesan('Halaman dikembalikan ke teks bawaan.');
+		} else {
+			$html = bersihkan_html((string) ($_POST['isi'] ?? ''));
+			if (trim(strip_tags($html)) === '') {
+				pesan('Isi halaman tidak boleh kosong.', 'galat');
+				arahkan('/admin/halaman/' . $slug);
+			}
+			simpan_pengaturan('konten_' . $slug, $html);
+			pesan('Halaman ' . $daftar[$slug] . ' tersimpan.');
+		}
+		arahkan('/admin/halaman/' . $slug);
+	}
+	$isi_sekarang = pengaturan('konten_' . $slug);
+	$ubah = $isi_sekarang !== '';
+	$html = $ubah ? $isi_sekarang : isi_bawaan_halaman($slug);
+	$tombol = [['p', 'Paragraf'], ['h2', 'Judul'], ['h3', 'Subjudul'], ['bold', '<strong>B</strong>'], ['italic', '<em>I</em>'], ['ul', '• Daftar'], ['ol', '1. Daftar'], ['link', 'Tautan'], ['unlink', 'Hapus tautan'], ['hapus', 'Hapus format']];
+	$isi = '<section class="panel"><p><a href="' . e(url('/admin/halaman')) . '">' . ikon('kembali') . ' Halaman Website</a></p>
+	<div class="judul-baris"><h1>' . e($daftar[$slug]) . '</h1><a class="tombol tombol--kedua tombol--kecil" href="' . e(url('/' . $slug . '/')) . '" target="_blank">Lihat halaman</a></div>
+	<p class="catatan">Ketik langsung di kotak di bawah, seperti di Word. Tulisan dalam kurung kurawal, misalnya <code>{{alamat}}</code> atau <code>{{paket}}</code>, otomatis diganti data dari Pengaturan atau kartu paket. Biarkan saja bila ingin tetap tampil.</p>
+	<form method="post" class="formulir penyunting" data-penyunting>' . csrf_field() . '
+		<div class="penyunting__alat" role="toolbar" aria-label="Format teks">' . implode('', array_map(fn ($t) => '<button type="button" class="tombol tombol--kedua tombol--kecil" data-perintah="' . $t[0] . '">' . $t[1] . '</button>', $tombol)) . '</div>
+		<div class="penyunting__isi konten" contenteditable="true" data-isi aria-label="Isi halaman">' . $html . '</div>
+		<textarea name="isi" hidden data-keluaran>' . e($html) . '</textarea>
+		<div class="aksi-baris"><button type="submit" class="tombol">Simpan Halaman</button></div>
+	</form>'
+	. ($ubah ? '<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="bawaan"><details><summary>Kembalikan ke teks bawaan</summary><p>Perubahan Anda di halaman ini akan dihapus.</p><button type="submit" class="tombol tombol--bahaya tombol--kecil">Kembalikan</button></details></form>' : '')
+	. '</section><script src="' . e(url('/assets/js/penyunting.js')) . '?v=1" defer></script>';
+	tampil('Ubah ' . $daftar[$slug], $isi, ['panel' => menu_admin('/admin/halaman')]);
+}
+
+/** Kotak "Pengiriman email" (SMTP) di halaman Pengaturan. */
+function form_pengaturan_email(array $admin): string
+{
+	$s = smtp_pengaturan();
+	$status = smtp_siap()
+		? '<p class="pesan pesan--ok">Email dikirim lewat kotak surat <strong>' . e($s['user']) . '</strong>.</p>'
+		: (email_siap()
+			? '<p class="pesan pesan--info">SMTP belum diatur. Email dikirim dengan fungsi mail() server, yang sering masuk Spam atau tidak sampai. Isi formulir di bawah agar email lupa kata sandi dan pemberitahuan status terkirim dengan andal.</p>'
+			: '<p class="pesan pesan--galat">Website belum bisa mengirim email. Fitur <strong>Lupa kata sandi</strong> dan pemberitahuan status lewat email belum berjalan sampai formulir di bawah diisi.</p>');
+	if ($s['dari_config']) {
+		return $status . '<p class="catatan">Pengaturan SMTP diambil dari file config.php di folder literaindo-data. Ubah di file itu.</p>
+	<form method="post" class="formulir">' . csrf_field() . '<input type="hidden" name="aksi" value="email"><input type="hidden" name="hanya_uji" value="1">
+		<button type="submit" class="tombol tombol--kedua">Kirim email uji ke ' . e($admin['email']) . '</button></form>';
+	}
+	return $status . '
+	<form method="post" class="formulir formulir-atur formulir-email" autocomplete="off">' . csrf_field() . '<input type="hidden" name="aksi" value="email">
+		<p class="catatan">Pakai kotak surat dari hPanel → <strong>Email</strong>, misalnya <em>noreply@literaindo.com</em>. Email lupa kata sandi dan pemberitahuan dikirim atas nama alamat ini.</p>
+		<label for="smtp_user">Alamat email pengirim</label>
+		<input type="email" id="smtp_user" name="smtp_user" value="' . e($s['user']) . '" placeholder="noreply@literaindo.com">
+		<label for="smtp_pass">Kata sandi kotak surat</label>
+		<input type="password" id="smtp_pass" name="smtp_pass" autocomplete="new-password" placeholder="' . ($s['pass'] !== '' ? 'Tersimpan. Kosongkan bila tidak diganti' : '') . '">
+		<details><summary>Server SMTP (biarkan bawaan untuk Hostinger)</summary>
+			<label for="smtp_host">Server SMTP</label>
+			<input id="smtp_host" name="smtp_host" value="' . e($s['host'] ?: 'smtp.hostinger.com') . '">
+			<label for="smtp_port">Port</label>
+			<input id="smtp_port" name="smtp_port" type="number" value="' . e((string) ($s['port'] ?: 465)) . '">
+			<label for="smtp_aman">Keamanan</label>
+			<select id="smtp_aman" name="smtp_aman"><option value="ssl"' . ($s['aman'] !== 'tls' ? ' selected' : '') . '>SSL (port 465)</option><option value="tls"' . ($s['aman'] === 'tls' ? ' selected' : '') . '>STARTTLS (port 587)</option></select>
+		</details>
+		<button type="submit" class="tombol">Simpan &amp; Kirim Email Uji ke ' . e($admin['email']) . '</button>
+		' . ($s['host'] !== '' ? '<label class="centang"><input type="checkbox" name="hapus" value="1"> Hapus pengaturan SMTP</label>' : '') . '
+	</form>';
+}
+
+function simpan_pengaturan_email(array $admin): void
+{
+	if (empty($_POST['hanya_uji']) && !smtp_pengaturan()['dari_config']) {
+		if (!empty($_POST['hapus'])) {
+			foreach (['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_aman'] as $k) {
+				simpan_pengaturan($k, '');
+			}
+			pesan('Pengaturan SMTP dihapus.', 'info');
+			return;
+		}
+		$user = mb_strtolower(input('smtp_user'));
+		if (!filter_var($user, FILTER_VALIDATE_EMAIL)) {
+			pesan('Isi alamat email pengirim yang valid.', 'galat');
+			return;
+		}
+		$host = preg_replace('/[^a-z0-9.-]/i', '', input('smtp_host', 'smtp.hostinger.com')) ?: 'smtp.hostinger.com';
+		simpan_pengaturan('smtp_host', $host);
+		simpan_pengaturan('smtp_port', (string) max(1, min(65535, (int) input('smtp_port', '465'))));
+		simpan_pengaturan('smtp_aman', input('smtp_aman') === 'tls' ? 'tls' : 'ssl');
+		simpan_pengaturan('smtp_user', $user);
+		$pass = (string) ($_POST['smtp_pass'] ?? '');
+		if ($pass !== '') {
+			simpan_pengaturan('smtp_pass', $pass);
+		}
+		if (pengaturan('smtp_pass') === '') {
+			pesan('Isi kata sandi kotak surat.', 'galat');
+			return;
+		}
+	}
+	$nama = $GLOBALS['SITUS']['nama'];
+	$ok = kirim_email($admin['email'], 'Email uji dari ' . $nama, "Halo {$admin['nama']},
+
+Email ini membuktikan website $nama sudah bisa mengirim email (lupa kata sandi dan pemberitahuan status).
+
+Salam,
+$nama", $galat);
+	$ok
+		? pesan('Tersimpan. Email uji terkirim ke ' . $admin['email'] . '. Periksa kotak masuk (atau folder Spam).')
+		: pesan('Tersimpan, tetapi email uji gagal: ' . $galat, 'galat');
+}

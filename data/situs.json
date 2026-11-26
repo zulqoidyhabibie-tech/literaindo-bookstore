@@ -1,0 +1,67 @@
+{
+  "nama": "CV. Master Literasi Indonesia",
+  "tagline": "Penerbit dan Toko Buku, Cetak dan E-book",
+  "url": "https://bookstore.literaindo.com",
+  "deskripsi": "CV. Master Literasi Indonesia adalah penerbit buku di Muara Bungo, Jambi. Kami menerbitkan dan menjual buku dari semua bidang, fiksi maupun nonfiksi, dalam format cetak dan e-book.",
+  "badan_usaha": "CV. Master Literasi Indonesia",
+  "alamat": "Jl. H. A. Manap Lrg. Doa RT.006 RW.002, Kel. Sungai Kerjan, Kec. Bungo Dani, Kab. Bungo, Jambi",
+  "email": "pressliteraindo@gmail.com",
+  "whatsapp": "6285353545536",
+  "whatsapp_tampil": "0853-5354-5536",
+  "jam_layanan": "Senin–Jumat, 08.00–16.00 WIB",
+  "qris_gambar": "/assets/img/qris-btn.png",
+  "qris_nama_merchant": "MASTER LITERASI INDONESIA",
+  "warna_utama": "#0b5a3f",
+  "menu": [
+    {
+      "label": "Katalog",
+      "url": "/"
+    },
+    {
+      "label": "Tentang Kami",
+      "url": "/tentang-kami/"
+    },
+    {
+      "label": "Layanan Penerbitan",
+      "url": "/layanan-penerbitan/",
+      "layanan": "terbit"
+    },
+    {
+      "label": "Layanan HKI",
+      "url": "/layanan-hki/",
+      "layanan": "hki"
+    },
+    {
+      "label": "Cara Pemesanan",
+      "url": "/cara-pemesanan/"
+    },
+    {
+      "label": "Kontak",
+      "url": "/kontak/"
+    }
+  ],
+  "tautan_terkait": [
+    {
+      "label": "Cara Pemesanan",
+      "url": "/cara-pemesanan/"
+    },
+    {
+      "label": "Syarat & Ketentuan",
+      "url": "/syarat-ketentuan/"
+    },
+    {
+      "label": "Kebijakan Privasi",
+      "url": "/kebijakan-privasi/"
+    },
+    {
+      "label": "Info ISBN",
+      "url": "/info-isbn/",
+      "layanan": "terbit"
+    },
+    {
+      "label": "Perpustakaan Nasional RI",
+      "url": "https://isbn.perpusnas.go.id/",
+      "layanan": "terbit"
+    }
+  ]
+}
