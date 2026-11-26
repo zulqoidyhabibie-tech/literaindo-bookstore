@@ -38,6 +38,10 @@ const IKON = [
 	'kirim'     => '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17.5" cy="18" r="1.6"/>',
 	'perisai'   => '<path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
 	'panah'     => '<path d="M5 12h14M13 6l6 6-6 6"/>',
+	'lihat'     => '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+	'masuk'     => '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5M15 12H3"/>',
+	'kunci'     => '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3M17 6l3 3M14.5 8.5l2.5 2.5"/>',
+	'centang'   => '<path d="m5 12 5 5 9-10"/>',
 	'unduh'     => '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
 ];
 
@@ -102,7 +106,7 @@ function tampil(string $judul, string $isi, array $opsi = []): void
 	$pesan = session_status() === PHP_SESSION_ACTIVE ? ambil_pesan() : '';
 	$panel = $opsi['panel'] ?? '';
 	$tahun = date('Y');
-	$css = url('/assets/css/gaya.css') . '?v=26';
+	$css = url('/assets/css/gaya.css') . '?v=27';
 
 	echo '<!doctype html>
 <html lang="id">
