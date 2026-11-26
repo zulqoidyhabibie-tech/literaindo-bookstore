@@ -138,6 +138,27 @@ function pastikan_skema(): void
 	if ($versi < 14) {
 		migrasi_harga_hki();
 	}
+	if ($versi < 15) {
+		migrasi_jejak_admin();
+	}
+}
+
+/** v15 (26 Nov 2026): catatan saat admin "masuk sebagai" pengguna lain. */
+function migrasi_jejak_admin(): void
+{
+	$driver = config()['db']['driver'] ?? 'mysql';
+	$id = $driver === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
+	$fk = $driver === 'sqlite' ? 'INTEGER' : 'INT UNSIGNED';
+	$akhir = $driver === 'sqlite' ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+	db()->exec("CREATE TABLE IF NOT EXISTS jejak_admin (
+			id $id,
+			admin_id $fk NOT NULL,
+			pengguna_id $fk NOT NULL,
+			aksi VARCHAR(20) NOT NULL,
+			ip VARCHAR(45) NOT NULL DEFAULT '',
+			dibuat DATETIME NOT NULL
+		)$akhir");
+	simpan_pengaturan('versi_skema', '15');
 }
 
 /** v14 (19 Nov 2026): harga khusus HKI (jenis biaya, kode harga khusus). */

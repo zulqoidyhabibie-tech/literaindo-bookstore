@@ -281,6 +281,25 @@ function pengguna(): ?array
 	return $u;
 }
 
+/** Admin asli bila admin sedang "masuk sebagai" pengguna lain; null bila tidak. */
+function admin_asal(): ?array
+{
+	static $a = false;
+	if ($a === false) {
+		$a = !empty($_SESSION['admin_asal']) ? satu("SELECT * FROM pengguna WHERE id = ? AND peran = 'admin'", [$_SESSION['admin_asal']]) : null;
+	}
+	return $a;
+}
+
+function catat_jejak_admin(int $admin_id, int $pengguna_id, string $aksi): void
+{
+	try {
+		q('INSERT INTO jejak_admin (admin_id, pengguna_id, aksi, ip, dibuat) VALUES (?, ?, ?, ?, ?)', [$admin_id, $pengguna_id, $aksi, mb_substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45), sekarang()]);
+	} catch (Throwable) {
+		// catatan gagal tidak boleh menghalangi admin
+	}
+}
+
 const PERAN = ['pengaju' => 'Penulis (pengaju)', 'keuangan' => 'Keuangan', 'admin' => 'Admin'];
 
 /** Halaman awal tiap peran setelah masuk. */

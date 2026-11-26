@@ -3706,3 +3706,66 @@ fieldset.serah legend {
 	border-left: 4px solid var(--aksen);
 	background: color-mix(in srgb, var(--aksen) 10%, #fff);
 }
+
+/* ---------- Admin: lihat akun & "masuk sebagai" ---------- */
+.pita-admin {
+	background: var(--aksen);
+	color: #1d1600;
+	position: sticky;
+	top: 0;
+	z-index: 50;
+}
+
+.pita-admin__baris {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem 1rem;
+	padding-block: 0.55rem;
+	font-size: 0.95rem;
+}
+
+.pita-admin form {
+	margin: 0;
+}
+
+.pita-admin .tombol {
+	background: var(--tinta);
+	border-color: var(--tinta);
+	color: #fff;
+}
+
+.aksi-pengguna {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-top: 0.45rem;
+}
+
+.aksi-pengguna form {
+	margin: 0;
+}
+
+.judul-aksi {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.6rem 1rem;
+	margin-bottom: 1rem;
+}
+
+.judul-aksi h1 {
+	margin: 0;
+}
+
+.judul-aksi form {
+	margin: 0;
+}
+
+.daftar-jejak {
+	padding-left: 1.2rem;
+	color: var(--redup);
+	font-size: 0.92rem;
+}
